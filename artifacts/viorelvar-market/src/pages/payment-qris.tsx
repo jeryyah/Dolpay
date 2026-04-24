@@ -3,11 +3,11 @@ import { useParams, useLocation } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import {
   CheckCircle, Clock, ShoppingBag, Copy, RefreshCw, Tag,
-  X as XIcon, Download,
+  X as XIcon, Download, Upload, FileImage,
 } from "lucide-react";
 import { BackButton } from "@/components/back-button";
 import {
-  getOrderById, confirmQrisPayment, getPaymentSettings,
+  getOrderById, submitQrisProof, getPaymentSettings,
   validateCoupon, redeemCoupon, getOrders, saveOrders,
   type Order,
 } from "@/lib/storage";
@@ -15,6 +15,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 
 const QR_TIMEOUT_SECONDS = 300; // 5 menit
+const MAX_PROOF_BYTES   = 5 * 1024 * 1024; // 5 MB
 
 export default function PaymentQRIS() {
   const { id } = useParams<{ id: string }>();
@@ -22,11 +23,17 @@ export default function PaymentQRIS() {
   const { user } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
   const [timeLeft, setTimeLeft] = useState(QR_TIMEOUT_SECONDS);
-  const [paid, setPaid] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [couponInput, setCouponInput] = useState("");
   const [couponMsg, setCouponMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  // Bukti transfer yang akan diupload ke admin.
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [proofError, setProofError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   // Kode unik manual untuk membantu admin mencocokkan pembayaran.
   const [uniqueCode] = useState(() => Math.floor(100 + Math.random() * 900));
@@ -39,7 +46,9 @@ export default function PaymentQRIS() {
     const o = getOrderById(id);
     if (!o) { navigate("/"); return; }
     setOrder(o);
-    if (o.status === "paid") { setPaid(true); }
+    if (o.status === "pending_verify" || o.status === "verified" || o.status === "paid") {
+      setSubmitted(true);
+    }
   }, [id]);
 
   const basePrice = order?.variantPrice || 0;
@@ -50,7 +59,7 @@ export default function PaymentQRIS() {
 
   // ─── Countdown timer ────────────────────────────────────────────────────
   useEffect(() => {
-    if (paid || !order) return;
+    if (submitted || !order) return;
     const t = setInterval(() => {
       setTimeLeft((s) => {
         if (s <= 1) { clearInterval(t); return 0; }
@@ -58,7 +67,7 @@ export default function PaymentQRIS() {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [paid, order]);
+  }, [submitted, order]);
 
   // ─── Coupon handlers ────────────────────────────────────────────────────
   const applyCoupon = () => {
@@ -98,16 +107,43 @@ export default function PaymentQRIS() {
     }
   };
 
-  const handleConfirm = async () => {
-    setConfirming(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    const updated = confirmQrisPayment(id);
+  // ─── Proof upload handlers ─────────────────────────────────────────────
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setProofError(null);
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) {
+      setProofError("File harus berupa gambar (JPG / PNG / WEBP).");
+      return;
+    }
+    if (f.size > MAX_PROOF_BYTES) {
+      setProofError("Ukuran maksimal 5MB. Coba kompres screenshot dulu.");
+      return;
+    }
+    setProofFile(f);
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewUrl(reader.result as string);
+    reader.readAsDataURL(f);
+  };
+
+  const clearProof = () => {
+    setProofFile(null);
+    setPreviewUrl(null);
+    setProofError(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleSubmit = async () => {
+    if (!proofFile || !previewUrl) return;
+    setSubmitting(true);
+    await new Promise((r) => setTimeout(r, 1200));
+    const updated = submitQrisProof(id, previewUrl, proofFile.name);
     if (updated) {
       if (updated.couponCode && user) redeemCoupon(updated.couponCode, user.id);
       setOrder(updated);
-      setPaid(true);
+      setSubmitted(true);
     }
-    setConfirming(false);
+    setSubmitting(false);
   };
 
   const handleCopy = (text: string) => {
@@ -151,7 +187,8 @@ export default function PaymentQRIS() {
 
   if (!order) return null;
 
-  if (paid && order.key) {
+  // ─── View 1: Sudah diverifikasi admin → tampilkan license key ─────────
+  if ((order.status === "verified" || order.status === "paid") && order.key) {
     return (
       <div className="min-h-screen bg-background noise-bg flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
@@ -160,7 +197,7 @@ export default function PaymentQRIS() {
           </div>
           <h1 className="text-2xl font-bold mb-1">Pembayaran Berhasil!</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            Pesanan kamu sudah dikonfirmasi. Ini key-nya:
+            Pesanan kamu sudah dikonfirmasi admin. Ini key-nya:
           </p>
 
           <div className="bg-card border border-border rounded-2xl p-5 mb-5">
@@ -187,6 +224,47 @@ export default function PaymentQRIS() {
     );
   }
 
+  // ─── View 2: Sudah kirim bukti, menunggu admin verifikasi ─────────────
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-background noise-bg flex items-center justify-center p-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="w-20 h-20 rounded-full bg-yellow-500/15 flex items-center justify-center mx-auto mb-5">
+            <Clock className="w-10 h-10 text-yellow-400" />
+          </div>
+          <h1 className="text-2xl font-bold mb-1">Menunggu Verifikasi</h1>
+          <p className="text-muted-foreground text-sm mb-6">
+            Bukti transfer kamu sudah dikirim ke admin. Verifikasi biasanya 1×24 jam.
+            Key akan muncul otomatis di halaman Riwayat begitu disetujui.
+          </p>
+
+          <div className="bg-card border border-border rounded-2xl p-4 mb-5 text-left space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Order ID</span>
+              <code className="font-mono font-bold text-xs">{order.id}</code>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Produk</span>
+              <span className="font-bold text-right">{order.productName}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Total Bayar</span>
+              <span className="font-bold text-primary">{formatCurrency(totalPay)}</span>
+            </div>
+          </div>
+
+          <button onClick={() => navigate("/history")} className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-all mb-2">
+            Pantau Status di Riwayat
+          </button>
+          <button onClick={() => navigate("/")} className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            Kembali ke Beranda
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── View 3: Halaman pembayaran utama (scan QR + upload bukti) ────────
   return (
     <div className="min-h-screen bg-background noise-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
@@ -199,7 +277,7 @@ export default function PaymentQRIS() {
           </div>
           <p className="text-sm text-muted-foreground">{order.productName} · {order.variantLabel}</p>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Mode manual · konfirmasi setelah transfer
+            Mode manual · upload bukti transfer setelah membayar
           </p>
         </div>
 
@@ -297,7 +375,6 @@ export default function PaymentQRIS() {
             <p className="text-xs text-muted-foreground text-center mb-1">Scan QR di atas dengan aplikasi e-wallet / m-banking</p>
             <p className="text-[10px] text-muted-foreground text-center mb-2 px-2">
               Pastikan transfer <strong className="text-primary">{formatCurrency(totalPay)}</strong> (termasuk kode unik).
-              Setelah transfer, klik tombol di bawah untuk konfirmasi.
             </p>
             <div className="flex items-center gap-1.5 text-xs">
               <Clock className="w-3 h-3 text-muted-foreground" />
@@ -321,19 +398,68 @@ export default function PaymentQRIS() {
             </div>
           </div>
 
-          {/* Confirm Button */}
+          {/* Upload Bukti Transfer */}
+          <div className="border-t border-border px-5 py-4">
+            <p className="text-sm font-bold mb-2.5 flex items-center gap-2">
+              <FileImage className="w-4 h-4 text-primary" />
+              Upload Bukti Transfer
+            </p>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            {!previewUrl ? (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="w-full border-2 border-dashed border-border hover:border-primary/50 rounded-xl py-6 flex flex-col items-center gap-1.5 transition-all group"
+              >
+                <Upload className="w-7 h-7 text-muted-foreground group-hover:text-primary transition-colors" />
+                <p className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                  Tap untuk pilih screenshot transfer
+                </p>
+                <p className="text-[10px] text-muted-foreground">JPG / PNG / WEBP · max 5MB</p>
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="relative rounded-xl overflow-hidden border border-border">
+                  <img src={previewUrl} alt="Bukti transfer" className="w-full object-cover max-h-44" />
+                  <button
+                    onClick={clearProof}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 text-xs font-bold"
+                    aria-label="Hapus bukti"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">{proofFile?.name}</p>
+              </div>
+            )}
+
+            {proofError && (
+              <p className="text-[11px] text-destructive mt-2">{proofError}</p>
+            )}
+          </div>
+
+          {/* Submit Button */}
           <div className="px-5 pb-5">
             <button
-              onClick={handleConfirm}
-              disabled={confirming || timeLeft === 0}
+              onClick={handleSubmit}
+              disabled={submitting || timeLeft === 0 || !proofFile}
               className="w-full py-3.5 bg-[#aaff00] text-black font-bold rounded-xl text-base transition-all hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {confirming ? (
-                <><RefreshCw className="w-4 h-4 animate-spin" /> Memverifikasi...</>
+              {submitting ? (
+                <><RefreshCw className="w-4 h-4 animate-spin" /> Mengirim...</>
               ) : timeLeft === 0 ? (
                 "QR Kadaluarsa"
+              ) : !proofFile ? (
+                "Upload Bukti Dulu"
               ) : (
-                "✓ Saya Sudah Membayar"
+                "✓ Kirim Bukti & Konfirmasi"
               )}
             </button>
             <button onClick={() => navigate("/")} className="w-full py-2.5 text-center text-sm text-muted-foreground hover:text-foreground transition-colors mt-2">

@@ -611,6 +611,9 @@ export function submitUsdtProof(orderId: string, fileBase64: string, fileName: s
   return updateOrder(orderId, { status: "pending_verify", proofFileBase64: fileBase64, proofFileName: fileName });
 }
 
+// Alias supaya halaman QRIS lebih jelas — flow sama persis (status pending_verify + bukti).
+export const submitQrisProof = submitUsdtProof;
+
 export function adminVerifyOrder(orderId: string): Order | null {
   const order = getOrderById(orderId);
   if (!order) return null;
