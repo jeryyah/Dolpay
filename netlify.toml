@@ -30,12 +30,10 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-[[redirects]]
-  from = "/api/*"
-  to = "https://your-api-host.example.com/api/:splat"
-  status = 200
-  force = true
-
+# SPA fallback — all unmatched paths go to index.html so client-side routing works.
+# This app is fully client-side (data lives in localStorage; payment gateway is
+# called directly from the browser to whichever URL admin configures), so there
+# is no /api/* proxy needed.
 [[redirects]]
   from = "/*"
   to = "/index.html"
