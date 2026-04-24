@@ -1,24 +1,28 @@
 // Real-time cloud sync layer.
 //
-// Every page that imports this module (via `startCloudSync()`) listens to
-// localStorage writes for whitelisted keys, pushes them to the
-// /api/sync Netlify function, and pulls remote updates on a fast polling
-// loop so all devices (admin + buyers) stay in sync within ~2 seconds.
+// All devices pull a shared snapshot from the /api/sync Netlify function
+// every ~2 seconds (and on visibility/focus/online events) so admin
+// changes — products, payment settings, prices, coupons, broadcasts, etc.
+// — propagate to every connected buyer in near real-time.
 //
-// Conflict policy: Last-Writer-Wins by client timestamp. Each push includes
-// `v: Date.now()` and the server only overwrites if the incoming `v` is
-// greater than the stored one.
+// Two key categories:
 //
-// Loop protection: when we apply a remote change locally we add the key to
-// `suppressNextSave`, so the resulting in-app `pinz:storage` event does NOT
-// trigger an echo POST back to the server.
+//   ADMIN_ONLY_KEYS  – configuration only the admin should ever write.
+//                      Non-admin sessions can READ but never PUSH; this
+//                      prevents a fresh visitor's seed defaults from
+//                      overwriting admin's settings on the server.
+//
+//   MULTI_WRITER_KEYS – transactional data that any session may write
+//                       (placing orders, registering accounts, etc.).
+//
+// Conflict policy: Last-Writer-Wins by client timestamp. The server only
+// overwrites a record if the incoming timestamp `v` is strictly greater
+// than the stored one. Loop guard `suppressNextSave` prevents the local
+// `pinz:storage` event triggered by an inbound pull from echoing back
+// to the server as a redundant POST.
 import { STORAGE_EVENT } from "./storage";
 
-export const SYNCED_KEYS: readonly string[] = [
-  "pinz_users",
-  "pinz_orders",
-  "pinz_stock",
-  "pinz_stok",
+const ADMIN_ONLY_KEYS = new Set<string>([
   "pinz_product_overrides",
   "pinz_extra_products",
   "pinz_categories",
@@ -28,15 +32,28 @@ export const SYNCED_KEYS: readonly string[] = [
   "pinz_payment_settings",
   "pinz_coupons",
   "pinz_broadcast",
-  "pinz_activity_log",
   "pinz_maintenance",
   "pinz_payment_binance_image",
   "pinz_payment_qris_image",
   "pinz_inapp_notif",
   "pinz_inapp_notifs",
+]);
+
+const MULTI_WRITER_KEYS = new Set<string>([
+  "pinz_users",
+  "pinz_orders",
+  "pinz_stock",
+  "pinz_stok",
   "pinz_purchase_notifs",
+  "pinz_activity_log",
+]);
+
+export const SYNCED_KEYS: readonly string[] = [
+  ...ADMIN_ONLY_KEYS,
+  ...MULTI_WRITER_KEYS,
 ];
 const SYNCED_SET = new Set(SYNCED_KEYS);
+
 const ENDPOINT = "/api/sync";
 const PUSH_DEBOUNCE_MS = 250;
 
@@ -44,13 +61,35 @@ const lastSeenV: Record<string, number> = {};
 const suppressNextSave = new Set<string>();
 const pushTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
 let started = false;
+let pullSucceeded = false;
 
 function isBrowser(): boolean {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
+function isAdmin(): boolean {
+  if (!isBrowser()) return false;
+  try {
+    const raw = localStorage.getItem("pinz_session");
+    if (!raw) return false;
+    const u = JSON.parse(raw);
+    return u?.role === "admin" || u?.role === "owner";
+  } catch {
+    return false;
+  }
+}
+
+function canPush(key: string): boolean {
+  if (!SYNCED_SET.has(key)) return false;
+  // Admin-only keys may only be pushed by an admin/owner session, so a
+  // first-time visitor with seed defaults can never overwrite the
+  // canonical config admin has set on the server.
+  if (ADMIN_ONLY_KEYS.has(key)) return isAdmin();
+  return true;
+}
+
 async function pushKey(key: string): Promise<void> {
-  if (!isBrowser()) return;
+  if (!isBrowser() || !canPush(key)) return;
   try {
     const value = localStorage.getItem(key);
     const res = await fetch(ENDPOINT, {
@@ -62,11 +101,12 @@ async function pushKey(key: string): Promise<void> {
     const data = await res.json().catch(() => null);
     if (data && typeof data.v === "number") lastSeenV[key] = data.v;
   } catch {
-    /* offline / network error — next pull will reconcile */
+    /* offline / network — next pull will reconcile */
   }
 }
 
 function schedulePush(key: string): void {
+  if (!canPush(key)) return;
   if (pushTimers[key]) clearTimeout(pushTimers[key]);
   pushTimers[key] = setTimeout(() => {
     pushTimers[key] = undefined;
@@ -107,26 +147,44 @@ async function pullAll(): Promise<void> {
         );
       } catch {}
     }
+    pullSucceeded = true;
   } catch {
     /* offline */
   }
 }
 
 /**
- * Start the cross-device sync loop. Safe to call multiple times — the
- * second call is a no-op. Returns a function that stops the sync.
+ * Pull the server snapshot into localStorage *before* the React app
+ * renders, so brand-new visitors see admin's live products / payment
+ * settings / prices on first paint instead of stale seed defaults.
+ *
+ * Resolves when the first pull completes or after `timeoutMs`, whichever
+ * comes first. After a successful prime, if the current session is an
+ * admin/owner, any whitelisted local key the server is missing is
+ * uploaded (one-time bootstrap so the admin's existing local config
+ * seeds the server on first deploy).
+ */
+export async function primeCloudSync(timeoutMs = 1500): Promise<void> {
+  if (!isBrowser()) return;
+  await Promise.race([
+    pullAll(),
+    new Promise<void>((r) => setTimeout(r, timeoutMs)),
+  ]);
+  if (pullSucceeded && isAdmin()) {
+    for (const k of SYNCED_KEYS) {
+      const local = localStorage.getItem(k);
+      if (local !== null && !lastSeenV[k]) schedulePush(k);
+    }
+  }
+}
+
+/**
+ * Start the live sync loop. Call once after `primeCloudSync()`. Safe to
+ * call multiple times — second call is a no-op. Returns a disposer.
  */
 export function startCloudSync(intervalMs = 2000): () => void {
   if (!isBrowser() || started) return () => {};
   started = true;
-
-  // First, push current local snapshot for any whitelisted key that has a
-  // value. The server will keep the newer record if one already exists.
-  for (const k of SYNCED_KEYS) {
-    if (localStorage.getItem(k) !== null) schedulePush(k);
-  }
-  // Pull remote state immediately, then on an interval.
-  pullAll();
 
   const onAppStorage = (e: Event) => {
     const detail = (e as CustomEvent).detail || {};
@@ -138,7 +196,6 @@ export function startCloudSync(intervalMs = 2000): () => void {
     }
     schedulePush(k);
   };
-  // Native cross-tab storage event (other tabs in the same browser).
   const onNativeStorage = (e: StorageEvent) => {
     if (!e.key || !SYNCED_SET.has(e.key)) return;
     if (suppressNextSave.has(e.key)) {
