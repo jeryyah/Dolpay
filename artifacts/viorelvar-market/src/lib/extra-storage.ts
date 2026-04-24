@@ -549,7 +549,17 @@ export function downloadBackup() {
   pushActivity("admin", "Database diunduh");
 }
 
-// ─── Live Chat (admin ↔ user via localStorage polling) ────────────────────
+// ─── Live Chat (admin ↔ user, server-of-truth via Netlify Blobs) ──────────
+//
+// Sumber kebenaran: endpoint serverless `/api/chat` (lihat
+// `netlify/functions/chat.mts`) yang menyimpan ChatMap di Netlify Blobs.
+// localStorage hanya cache lokal supaya UI bisa render instan & offline.
+//
+// Alur sinkron:
+//  • `sendChat()`         → optimistic insert ke localStorage + POST ke server
+//  • `markChatRead()`     → optimistic update + PATCH ke server
+//  • `startChatSync(ms)`  → polling GET tiap N ms; merge respons ke localStorage
+//                            lalu broadcast event `pinz_chat_new` agar UI re-render
 export interface ChatMessage {
   id: string;
   from: "user" | "admin";
@@ -558,22 +568,70 @@ export interface ChatMessage {
   read?: boolean;
 }
 const CHAT_KEY = "pinz_chat";
+const CHAT_API = "/api/chat";
 type ChatMap = Record<string, ChatMessage[]>;
 function getChatMap(): ChatMap {
   try { return JSON.parse(localStorage.getItem(CHAT_KEY) || "{}"); } catch { return {}; }
 }
 function saveChatMap(m: ChatMap) { localStorage.setItem(CHAT_KEY, JSON.stringify(m)); }
+
+// Gabungkan dua ChatMap. Pesan dari server jadi acuan; pesan lokal yang
+// belum sempat ter-POST tetap dipertahankan (dedupe berdasar at|from|text
+// sebab id lokal pasti beda dengan id server).
+function mergeChatMaps(local: ChatMap, remote: ChatMap): ChatMap {
+  const out: ChatMap = { ...remote };
+  for (const [uid, localMsgs] of Object.entries(local)) {
+    const remoteMsgs = out[uid] || [];
+    const seen = new Set(remoteMsgs.map((m) => `${m.at}|${m.from}|${m.text}`));
+    const extras = localMsgs.filter((m) => !seen.has(`${m.at}|${m.from}|${m.text}`));
+    if (extras.length === 0 && remoteMsgs.length === localMsgs.length) {
+      out[uid] = remoteMsgs;
+    } else {
+      out[uid] = [...remoteMsgs, ...extras]
+        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+        .slice(-200);
+    }
+  }
+  return out;
+}
+
+function broadcastChatChange(detail: Record<string, unknown> = {}) {
+  try { window.dispatchEvent(new CustomEvent("pinz_chat_new", { detail })); } catch {}
+}
+
 export function getChatThread(userId: string): ChatMessage[] {
   return getChatMap()[userId] || [];
 }
+
 export function sendChat(userId: string, from: "user" | "admin", text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  // 1) Optimistic insert lokal supaya UI langsung tampak.
   const m = getChatMap();
   const cur = m[userId] || [];
-  cur.push({ id: rid(), from, text, at: new Date().toISOString(), read: false });
+  cur.push({ id: rid(), from, text: trimmed, at: new Date().toISOString(), read: false });
   m[userId] = cur.slice(-200);
   saveChatMap(m);
-  try { window.dispatchEvent(new CustomEvent("pinz_chat_new", { detail: { userId, from } })); } catch {}
+  broadcastChatChange({ userId, from });
+  // 2) Kirim ke server (fire-and-forget). Respon berisi map terbaru,
+  //    langsung dipakai untuk sinkron lokal.
+  void fetch(CHAT_API, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId, from, text: trimmed }),
+  })
+    .then(async (r) => {
+      if (!r.ok) return;
+      const data = (await r.json()) as { map?: ChatMap };
+      if (data.map) {
+        const merged = mergeChatMaps(getChatMap(), data.map);
+        saveChatMap(merged);
+        broadcastChatChange({ source: "post" });
+      }
+    })
+    .catch(() => {});
 }
+
 export function getAllChatThreads(): { userId: string; lastMessage?: ChatMessage; unread: number }[] {
   const m = getChatMap();
   return Object.entries(m).map(([userId, msgs]) => ({
@@ -586,10 +644,49 @@ export function getAllChatThreads(): { userId: string; lastMessage?: ChatMessage
     return bt - at;
   });
 }
+
 export function markChatRead(userId: string, side: "user" | "admin") {
   const m = getChatMap();
   m[userId] = (m[userId] || []).map((msg) => msg.from !== side ? { ...msg, read: true } : msg);
   saveChatMap(m);
+  void fetch(CHAT_API, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId, side }),
+  }).catch(() => {});
+}
+
+// Tarik ChatMap terbaru dari server dan merge ke localStorage.
+let _chatPullInFlight = false;
+export async function pullChatsFromServer(): Promise<void> {
+  if (_chatPullInFlight) return;
+  _chatPullInFlight = true;
+  try {
+    const res = await fetch(CHAT_API, { headers: { "cache-control": "no-store" } });
+    if (!res.ok) return;
+    const remote = (await res.json()) as ChatMap;
+    const local = getChatMap();
+    const merged = mergeChatMaps(local, remote);
+    if (JSON.stringify(merged) !== JSON.stringify(local)) {
+      saveChatMap(merged);
+      broadcastChatChange({ source: "pull" });
+    }
+  } catch {}
+  finally { _chatPullInFlight = false; }
+}
+
+// Mulai polling otomatis (default tiap 1.5 detik). Mengembalikan fungsi
+// untuk menghentikannya — panggil dari `useEffect` cleanup.
+export function startChatSync(intervalMs = 1500): () => void {
+  void pullChatsFromServer();
+  const t = setInterval(() => { void pullChatsFromServer(); }, intervalMs);
+  // Sinkron juga waktu tab kembali aktif supaya tidak menunggu interval.
+  const onVisible = () => { if (document.visibilityState === "visible") void pullChatsFromServer(); };
+  document.addEventListener("visibilitychange", onVisible);
+  return () => {
+    clearInterval(t);
+    document.removeEventListener("visibilitychange", onVisible);
+  };
 }
 
 // ─── Impersonation ─────────────────────────────────────────────────────────

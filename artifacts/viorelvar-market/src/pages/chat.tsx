@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Send, ArrowLeft, MessageCircle, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Navbar } from "@/components/layout/navbar";
-import { getChatThread, sendChat, markChatRead, type ChatMessage } from "@/lib/extra-storage";
+import { getChatThread, sendChat, markChatRead, startChatSync, type ChatMessage } from "@/lib/extra-storage";
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -19,10 +19,12 @@ export default function ChatPage() {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 2500);
-    const handler = (e: any) => { if (e.detail?.userId === user?.id) refresh(); };
+    // Polling sinkron ke server (Netlify Blobs) tiap 1.5 detik supaya
+    // balasan admin dari perangkat lain langsung muncul tanpa reload.
+    const stopSync = startChatSync(1500);
+    const handler = () => refresh();
     window.addEventListener("pinz_chat_new", handler);
-    return () => { clearInterval(t); window.removeEventListener("pinz_chat_new", handler); };
+    return () => { stopSync(); window.removeEventListener("pinz_chat_new", handler); };
   }, [user?.id]);
 
   useEffect(() => {

@@ -10,6 +10,10 @@
   },
   "private": true,
   "packageManager": "pnpm@10.26.1",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "@netlify/functions": "^2.8.2"
+  },
   "devDependencies": {
     "typescript": "~5.9.2",
     "prettier": "^3.8.1"

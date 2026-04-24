@@ -24,7 +24,7 @@ import {
   refundOrder,
   exportDatabase, downloadBackup, importDatabase,
   get2FASecret, getCurrent2FACode, reset2FASecret, set2FAEnabled,
-  getAllChatThreads, getChatThread, sendChat, markChatRead,
+  getAllChatThreads, getChatThread, sendChat, markChatRead, startChatSync,
   startImpersonate, type ChatMessage,
   TIERS, type TierRole, getRoleBadge, setUserRole, autoGrantTier,
   getUserSpending, AUTO_GRANT_RULES,
@@ -854,8 +854,15 @@ export function ChatTab() {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 2500);
-    return () => clearInterval(t);
+    // Polling sinkron ke server (Netlify Blobs) — pesan dari pembeli di
+    // perangkat lain langsung muncul di inbox admin tanpa reload.
+    const stopSync = startChatSync(1500);
+    const onChatEvent = () => refresh();
+    window.addEventListener("pinz_chat_new", onChatEvent);
+    return () => {
+      stopSync();
+      window.removeEventListener("pinz_chat_new", onChatEvent);
+    };
   }, [activeUser]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
