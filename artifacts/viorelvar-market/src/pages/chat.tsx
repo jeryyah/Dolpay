@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { Send, ArrowLeft, MessageCircle, ShieldCheck } from "lucide-react";
+import { Send, ArrowLeft, MessageCircle, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Navbar } from "@/components/layout/navbar";
-import { getChatThread, sendChat, markChatRead, startChatSync, type ChatMessage } from "@/lib/extra-storage";
+import { getChatThread, sendChat, markChatRead, startChatSync, resetChatThread, type ChatMessage } from "@/lib/extra-storage";
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -48,6 +48,12 @@ export default function ChatPage() {
     }
   };
 
+  const handleReset = () => {
+    if (!confirm("Hapus seluruh riwayat chat dengan admin?\n\nAdmin akan diberi tahu bahwa kamu mereset chat.")) return;
+    resetChatThread(user.id, "user", user.username);
+    setMsgs(getChatThread(user.id));
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
@@ -70,6 +76,15 @@ export default function ChatPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Online
               </p>
             </div>
+            {msgs.length > 0 && (
+              <button
+                onClick={handleReset}
+                title="Reset / hapus riwayat chat dengan admin"
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Reset
+              </button>
+            )}
           </div>
 
           {/* Messages */}

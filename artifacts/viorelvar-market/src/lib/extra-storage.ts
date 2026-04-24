@@ -660,6 +660,63 @@ export function markChatRead(userId: string, side: "user" | "admin") {
   }).catch(() => {});
 }
 
+// Reset/hapus seluruh riwayat chat untuk satu user. Optimistic update lokal
+// + DELETE ke server. Server akan menyisipkan satu pesan sistem supaya
+// kedua sisi tahu chat sudah direset & thread tetap terlihat di inbox admin.
+// Aksi ini juga ter-log di Activity Log admin (tersinkron antar device
+// karena pinz_activity_log termasuk MULTI_WRITER_KEYS di cloud-sync).
+export function resetChatThread(
+  userId: string,
+  by: "user" | "admin",
+  byName?: string,
+) {
+  // 1) Optimistic clear lokal (ganti dengan placeholder sistem).
+  const m = getChatMap();
+  const sysText =
+    by === "user"
+      ? `[Sistem] Riwayat chat direset oleh pengguna${byName ? ` (@${byName})` : ""}.`
+      : `[Sistem] Riwayat chat direset oleh admin${byName ? ` (@${byName})` : ""}.`;
+  m[userId] = [
+    {
+      id: rid(),
+      from: "admin",
+      text: sysText,
+      at: new Date().toISOString(),
+      read: by === "admin",
+    },
+  ];
+  saveChatMap(m);
+  broadcastChatChange({ userId, action: "reset", by });
+
+  // 2) Catat ke activity log supaya muncul di panel admin (Activity Log)
+  //    di semua device admin yang lain.
+  try {
+    pushActivity(
+      "system",
+      by === "user"
+        ? `Pengguna mereset riwayat chat`
+        : `Admin mereset riwayat chat user`,
+      { actor: byName, userId, by, channel: "chat" },
+    );
+  } catch {}
+
+  // 3) Sync ke server.
+  void fetch(CHAT_API, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId, by, byName }),
+  })
+    .then(async (r) => {
+      if (!r.ok) return;
+      const data = (await r.json()) as { map?: ChatMap };
+      if (data.map) {
+        saveChatMap(data.map);
+        broadcastChatChange({ source: "delete" });
+      }
+    })
+    .catch(() => {});
+}
+
 // Tarik ChatMap terbaru dari server dan merge ke localStorage.
 let _chatPullInFlight = false;
 export async function pullChatsFromServer(): Promise<void> {

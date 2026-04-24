@@ -24,7 +24,7 @@ import {
   refundOrder,
   exportDatabase, downloadBackup, importDatabase,
   get2FASecret, getCurrent2FACode, reset2FASecret, set2FAEnabled,
-  getAllChatThreads, getChatThread, sendChat, markChatRead, startChatSync,
+  getAllChatThreads, getChatThread, sendChat, markChatRead, startChatSync, resetChatThread,
   startImpersonate, type ChatMessage,
   TIERS, type TierRole, getRoleBadge, setUserRole, autoGrantTier,
   getUserSpending, AUTO_GRANT_RULES,
@@ -841,6 +841,7 @@ export function RefundModal({ order, onClose, onDone, actor }: { order: Order; o
 // 9. LIVE CHAT (Admin side)
 // ════════════════════════════════════════════════════════════════════════
 export function ChatTab() {
+  const { user: actor } = useAuth();
   const [threads, setThreads] = useState(() => getAllChatThreads());
   const [activeUser, setActiveUser] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -877,6 +878,14 @@ export function ChatTab() {
     if (!activeUser || !draft.trim()) return;
     sendChat(activeUser, "admin", draft.trim());
     setDraft("");
+    refresh();
+  };
+
+  const onReset = () => {
+    if (!activeUser) return;
+    const u = userMap.get(activeUser);
+    if (!confirm(`Reset seluruh riwayat chat dengan @${u?.username || activeUser}?\n\nSemua pesan akan dihapus permanen di server dan di semua perangkat.`)) return;
+    resetChatThread(activeUser, "admin", actor?.username);
     refresh();
   };
 
@@ -917,8 +926,15 @@ export function ChatTab() {
           <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Pilih pengguna di kiri untuk memulai</div>
         ) : (
           <>
-            <div className="px-4 py-3 border-b border-border">
-              <p className="font-bold text-sm">@{userMap.get(activeUser)?.username || activeUser}</p>
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
+              <p className="font-bold text-sm truncate">@{userMap.get(activeUser)?.username || activeUser}</p>
+              <button
+                onClick={onReset}
+                title="Reset / hapus seluruh riwayat chat dengan user ini"
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Reset Pesan
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {msgs.map((m) => (
