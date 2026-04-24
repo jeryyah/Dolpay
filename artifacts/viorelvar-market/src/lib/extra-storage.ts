@@ -573,6 +573,47 @@ export interface ChatMessage {
 }
 const CHAT_KEY = "pinz_chat";
 const CHAT_API = "/api/chat";
+
+// Fallback backend chat lewat layanan public KV (jsonblob.com).
+// Dipakai kalau Netlify Function /api/chat tidak available (404) — ini
+// terjadi misalnya saat deploy Netlify gagal/stuck. Browser nge-PUT/GET
+// langsung ke jsonblob.com pakai CORS publik, tidak butuh server side.
+// Dua device yang akses bin yang sama otomatis lihat chat yang sama.
+const JSONBLOB_CHAT_URL =
+  "https://jsonblob.com/api/jsonBlob/019dc00e-9d28-7c1e-9085-e5f9861320e9";
+
+// State internal: kalau /api/chat sudah pernah 404, langsung skip ke fallback
+// supaya tidak buang waktu round-trip yang pasti gagal.
+let _chatApiBroken = false;
+
+async function remoteGetMap(): Promise<ChatMap | null> {
+  if (!_chatApiBroken) {
+    try {
+      const r = await fetch(CHAT_API, { headers: { "cache-control": "no-store" } });
+      if (r.ok) return (await r.json()) as ChatMap;
+      if (r.status === 404) _chatApiBroken = true;
+    } catch {}
+  }
+  // Fallback: baca dari jsonblob.
+  try {
+    const r = await fetch(JSONBLOB_CHAT_URL, { cache: "no-store" });
+    if (!r.ok) return null;
+    return (await r.json()) as ChatMap;
+  } catch { return null; }
+}
+
+async function remotePutMap(map: ChatMap): Promise<void> {
+  // Tulis ke jsonblob (PUT replace seluruh isi). /api/chat lewati di mode
+  // fallback karena dia tidak menerima PUT bulk — masing2 mutation di-handle
+  // di sendChat/markChatRead/resetChatThread melalui POST/PATCH/DELETE.
+  try {
+    await fetch(JSONBLOB_CHAT_URL, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(map),
+    });
+  } catch {}
+}
 type ChatMap = Record<string, ChatMessage[]>;
 function getChatMap(): ChatMap {
   try { return JSON.parse(localStorage.getItem(CHAT_KEY) || "{}"); } catch { return {}; }
@@ -607,6 +648,20 @@ export function getChatThread(userId: string): ChatMessage[] {
   return getChatMap()[userId] || [];
 }
 
+// Push ChatMap lokal ke remote backend lewat jsonblob (read-modify-write
+// untuk merge dengan pesan terbaru dari device lain). Dipakai sebagai
+// fallback kalau Netlify Function /api/chat tidak available.
+async function pushChatViaJSONBlob() {
+  try {
+    const r = await fetch(JSONBLOB_CHAT_URL, { cache: "no-store" });
+    const remote = (r.ok ? ((await r.json()) as ChatMap) : {}) || {};
+    const merged = mergeChatMaps(getChatMap(), remote);
+    saveChatMap(merged);
+    await remotePutMap(merged);
+    broadcastChatChange({ source: "jsonblob-push" });
+  } catch {}
+}
+
 export function sendChat(userId: string, from: "user" | "admin", text: string) {
   const trimmed = text.trim();
   if (!trimmed) return;
@@ -617,15 +672,20 @@ export function sendChat(userId: string, from: "user" | "admin", text: string) {
   m[userId] = cur.slice(-200);
   saveChatMap(m);
   broadcastChatChange({ userId, from });
-  // 2) Kirim ke server (fire-and-forget). Respon berisi map terbaru,
-  //    langsung dipakai untuk sinkron lokal.
+  // 2) Kirim ke server. Coba /api/chat dulu; kalau broken (404) → fallback
+  //    ke jsonblob (PUT ChatMap utuh).
+  if (_chatApiBroken) {
+    void pushChatViaJSONBlob();
+    return;
+  }
   void fetch(CHAT_API, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ userId, from, text: trimmed }),
   })
     .then(async (r) => {
-      if (!r.ok) return;
+      if (r.status === 404) { _chatApiBroken = true; void pushChatViaJSONBlob(); return; }
+      if (!r.ok) { void pushChatViaJSONBlob(); return; }
       const data = (await r.json()) as { map?: ChatMap };
       if (data.map) {
         const merged = mergeChatMaps(getChatMap(), data.map);
@@ -633,7 +693,7 @@ export function sendChat(userId: string, from: "user" | "admin", text: string) {
         broadcastChatChange({ source: "post" });
       }
     })
-    .catch(() => {});
+    .catch(() => { void pushChatViaJSONBlob(); });
 }
 
 export function getAllChatThreads(): { userId: string; lastMessage?: ChatMessage; unread: number }[] {
@@ -653,11 +713,14 @@ export function markChatRead(userId: string, side: "user" | "admin") {
   const m = getChatMap();
   m[userId] = (m[userId] || []).map((msg) => msg.from !== side ? { ...msg, read: true } : msg);
   saveChatMap(m);
+  if (_chatApiBroken) { void pushChatViaJSONBlob(); return; }
   void fetch(CHAT_API, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ userId, side }),
-  }).catch(() => {});
+  }).then((r) => {
+    if (r.status === 404) { _chatApiBroken = true; void pushChatViaJSONBlob(); }
+  }).catch(() => { void pushChatViaJSONBlob(); });
 }
 
 // Reset/hapus seluruh riwayat chat untuk satu user. Optimistic update lokal
@@ -700,32 +763,34 @@ export function resetChatThread(
     );
   } catch {}
 
-  // 3) Sync ke server.
+  // 3) Sync ke server. /api/chat dulu, fallback jsonblob (PUT seluruh map).
+  if (_chatApiBroken) { void pushChatViaJSONBlob(); return; }
   void fetch(CHAT_API, {
     method: "DELETE",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ userId, by, byName }),
   })
     .then(async (r) => {
-      if (!r.ok) return;
+      if (r.status === 404) { _chatApiBroken = true; void pushChatViaJSONBlob(); return; }
+      if (!r.ok) { void pushChatViaJSONBlob(); return; }
       const data = (await r.json()) as { map?: ChatMap };
       if (data.map) {
         saveChatMap(data.map);
         broadcastChatChange({ source: "delete" });
       }
     })
-    .catch(() => {});
+    .catch(() => { void pushChatViaJSONBlob(); });
 }
 
 // Tarik ChatMap terbaru dari server dan merge ke localStorage.
+// Pakai remoteGetMap() yang otomatis fallback ke jsonblob kalau /api/chat 404.
 let _chatPullInFlight = false;
 export async function pullChatsFromServer(): Promise<void> {
   if (_chatPullInFlight) return;
   _chatPullInFlight = true;
   try {
-    const res = await fetch(CHAT_API, { headers: { "cache-control": "no-store" } });
-    if (!res.ok) return;
-    const remote = (await res.json()) as ChatMap;
+    const remote = await remoteGetMap();
+    if (!remote) return;
     const local = getChatMap();
     const merged = mergeChatMaps(local, remote);
     if (JSON.stringify(merged) !== JSON.stringify(local)) {
