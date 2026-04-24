@@ -711,9 +711,13 @@ export interface PaymentSettings {
   binanceQrBase64: string;
 }
 
+// Defaults are intentionally blank — admin must configure their own real
+// payment details (Binance Pay ID + QR images) via the admin panel.
+// Hardcoding a placeholder ID would risk pushing demo data into the live
+// store and cause buyers to send funds to the wrong account.
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   qrisImageBase64: "",
-  binancePayId: "478829361",
+  binancePayId: "",
   binanceQrBase64: "",
 };
 
