@@ -2,6 +2,14 @@
   command = "pnpm install --no-frozen-lockfile && BASE_PATH=/ PORT=3000 NODE_ENV=production pnpm --filter @workspace/viorelvar-market run build"
   publish = "artifacts/viorelvar-market/dist/public"
 
+# Netlify Functions: serverless proxy for the Rama Shop QRIS gateway so the
+# browser can call it without CORS issues. See netlify/functions/rama.mts —
+# it forwards /api/rama/* to https://ramashop.my.id/* with X-API-Key header
+# pass-through.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 [build.environment]
   NODE_VERSION = "20"
   NPM_FLAGS = "--version"
@@ -30,10 +38,19 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# Rama Shop QRIS gateway proxy — must come BEFORE the SPA catch-all so the
+# `/*` rewrite below doesn't swallow the function URL. Netlify Functions v2
+# auto-binds the function via its exported `config.path`, but we keep this
+# explicit rule as a safety net.
+[[redirects]]
+  from = "/api/rama/*"
+  to = "/.netlify/functions/rama/:splat"
+  status = 200
+  force = true
+
 # SPA fallback — all unmatched paths go to index.html so client-side routing works.
-# This app is fully client-side (data lives in localStorage; payment gateway is
-# called directly from the browser to whichever URL admin configures), so there
-# is no /api/* proxy needed.
+# Data lives in localStorage; the QRIS gateway is reached either directly (if
+# Rama allows the site origin in CORS) or via the /api/rama proxy above.
 [[redirects]]
   from = "/*"
   to = "/index.html"
