@@ -15,7 +15,11 @@
 // X-API-Key is forwarded as-is from the client; the function never stores
 // or sees the key beyond a single in-flight request.
 
-import type { Context, Config } from "@netlify/functions";
+// Local minimal types so we don't need to depend on @netlify/functions in
+// package.json (avoids touching the workspace lockfile). Only the shape
+// we actually use is declared here.
+type Context = Record<string, unknown>;
+type Config = { path: string | string[] };
 
 const RAMA_ORIGIN = "https://ramashop.my.id";
 const FORWARD_HEADERS = new Set([
