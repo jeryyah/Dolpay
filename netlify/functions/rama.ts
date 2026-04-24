@@ -1,4 +1,5 @@
-// Netlify Function — proxies Rama Shop public-API requests to bypass CORS.
+// Netlify Function (v1 handler syntax) — proxies Rama Shop public-API
+// requests so the browser can call the QRIS gateway without CORS issues.
 //
 // Request:   <site>/api/rama/<rest-of-path>
 // Forwarded: https://ramashop.my.id/<rest-of-path>
@@ -11,17 +12,9 @@
 // which lands at
 //
 //     POST https://ramashop.my.id/api/public/deposit/create
-//
-// X-API-Key is forwarded as-is from the client; the function never stores
-// or sees the key beyond a single in-flight request.
-
-// Local minimal types so we don't need to depend on @netlify/functions in
-// package.json (avoids touching the workspace lockfile). Only the shape
-// we actually use is declared here.
-type Context = Record<string, unknown>;
-type Config = { path: string | string[] };
 
 const RAMA_ORIGIN = "https://ramashop.my.id";
+
 const FORWARD_HEADERS = new Set([
   "x-api-key",
   "authorization",
@@ -29,6 +22,7 @@ const FORWARD_HEADERS = new Set([
   "content-type",
   "user-agent",
 ]);
+
 const STRIP_RESPONSE_HEADERS = new Set([
   "content-encoding",
   "content-length",
@@ -36,34 +30,67 @@ const STRIP_RESPONSE_HEADERS = new Set([
   "connection",
 ]);
 
-export default async (req: Request, _ctx: Context): Promise<Response> => {
-  // CORS preflight — accept any origin since the function fronts a public API.
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "X-API-Key, Authorization, Content-Type, Accept",
-        "Access-Control-Max-Age": "86400",
-      },
-    });
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "X-API-Key, Authorization, Content-Type, Accept",
+  "Access-Control-Max-Age": "86400",
+};
+
+interface NetlifyEvent {
+  httpMethod: string;
+  path: string;
+  rawUrl?: string;
+  rawQuery?: string;
+  queryStringParameters?: Record<string, string> | null;
+  headers: Record<string, string>;
+  body: string | null;
+  isBase64Encoded?: boolean;
+}
+
+interface NetlifyResponse {
+  statusCode: number;
+  headers?: Record<string, string>;
+  body: string;
+  isBase64Encoded?: boolean;
+}
+
+export const handler = async (event: NetlifyEvent): Promise<NetlifyResponse> => {
+  // CORS preflight.
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: CORS_HEADERS, body: "" };
   }
 
-  const url = new URL(req.url);
-  // Strip the /api/rama mount segment to get the upstream path + query.
-  const upstreamPath = url.pathname.replace(/^\/api\/rama/, "") || "/";
-  const target = `${RAMA_ORIGIN}${upstreamPath}${url.search}`;
+  // Compute upstream path. Netlify rewrites `/api/rama/<rest>` to
+  // `/.netlify/functions/rama/<rest>`, so event.path will look like
+  // `/.netlify/functions/rama/api/public/balance`. Strip the function
+  // mount prefix to get the upstream path.
+  let upstreamPath = event.path || "/";
+  upstreamPath = upstreamPath.replace(/^\/\.netlify\/functions\/rama/, "");
+  upstreamPath = upstreamPath.replace(/^\/api\/rama/, "");
+  if (!upstreamPath || upstreamPath === "") upstreamPath = "/";
 
+  const qs = event.rawQuery
+    ? `?${event.rawQuery}`
+    : event.queryStringParameters && Object.keys(event.queryStringParameters).length > 0
+      ? `?${new URLSearchParams(event.queryStringParameters as Record<string, string>).toString()}`
+      : "";
+
+  const target = `${RAMA_ORIGIN}${upstreamPath}${qs}`;
+
+  // Forward only safe headers; downcase keys for matching.
   const headers: Record<string, string> = {};
-  req.headers.forEach((value, name) => {
-    if (FORWARD_HEADERS.has(name.toLowerCase())) headers[name] = value;
-  });
+  for (const [name, value] of Object.entries(event.headers || {})) {
+    if (FORWARD_HEADERS.has(name.toLowerCase()) && typeof value === "string") {
+      headers[name] = value;
+    }
+  }
 
-  const init: RequestInit = { method: req.method, headers };
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    // Pass body through verbatim — works for JSON or anything else.
-    init.body = await req.text();
+  const init: RequestInit = { method: event.httpMethod, headers };
+  if (event.httpMethod !== "GET" && event.httpMethod !== "HEAD" && event.body != null) {
+    init.body = event.isBase64Encoded
+      ? Buffer.from(event.body, "base64").toString("utf8")
+      : event.body;
   }
 
   const ctrl = new AbortController();
@@ -73,37 +100,26 @@ export default async (req: Request, _ctx: Context): Promise<Response> => {
     const upstream = await fetch(target, { ...init, signal: ctrl.signal });
     const body = await upstream.text();
 
-    const out = new Headers();
+    const outHeaders: Record<string, string> = { ...CORS_HEADERS };
     upstream.headers.forEach((value, name) => {
-      if (!STRIP_RESPONSE_HEADERS.has(name.toLowerCase())) out.set(name, value);
+      if (!STRIP_RESPONSE_HEADERS.has(name.toLowerCase())) outHeaders[name] = value;
     });
-    out.set("Access-Control-Allow-Origin", "*");
-    out.set("Access-Control-Expose-Headers", "*");
 
-    return new Response(body, { status: upstream.status, headers: out });
-  } catch (err: any) {
-    const aborted = err?.name === "AbortError";
-    return new Response(
-      JSON.stringify({
+    return { statusCode: upstream.status, headers: outHeaders, body };
+  } catch (err) {
+    const e = err as { name?: string; message?: string };
+    const aborted = e?.name === "AbortError";
+    return {
+      statusCode: aborted ? 504 : 502,
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({
         success: false,
         message: aborted
           ? "Upstream Rama API timeout (15s)"
-          : `Upstream Rama API unreachable: ${err?.message || "unknown error"}`,
+          : `Upstream Rama API unreachable: ${e?.message || "unknown error"}`,
       }),
-      {
-        status: aborted ? 504 : 502,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      },
-    );
+    };
   } finally {
     clearTimeout(timer);
   }
-};
-
-export const config: Config = {
-  // All requests starting with /api/rama/ hit this function.
-  path: "/api/rama/*",
 };
