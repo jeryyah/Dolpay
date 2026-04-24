@@ -693,9 +693,10 @@ export function getBroadcast(): Broadcast | null {
 export function setBroadcast(bc: Omit<Broadcast, "id" | "createdAt">): Broadcast {
   const broadcast: Broadcast = { ...bc, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), createdAt: new Date().toISOString() };
   localStorage.setItem("pinz_broadcast", JSON.stringify(broadcast));
+  broadcastStorageChange("pinz_broadcast");
   return broadcast;
 }
-export function clearBroadcast(): void { localStorage.removeItem("pinz_broadcast"); }
+export function clearBroadcast(): void { localStorage.removeItem("pinz_broadcast"); broadcastStorageChange("pinz_broadcast"); }
 export function hasBroadcastBeenSeen(broadcastId: string): boolean { return localStorage.getItem("pinz_broadcast_seen") === broadcastId; }
 export function markBroadcastSeen(broadcastId: string): void { localStorage.setItem("pinz_broadcast_seen", broadcastId); }
 
@@ -834,6 +835,7 @@ function pushPurchaseNotif(order: Order, key: string) {
     createdAt: new Date().toISOString(),
   });
   localStorage.setItem("pinz_purchase_notifs", JSON.stringify(notifs.slice(0, 30)));
+  broadcastStorageChange("pinz_purchase_notifs");
   try { window.dispatchEvent(new CustomEvent("pinz_new_purchase", { detail: notifs[0] })); } catch {}
 }
 

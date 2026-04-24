@@ -2,7 +2,7 @@
 // Extra storage helpers — semua fitur tambahan disatukan di sini supaya
 // storage.ts tetap fokus pada core.
 // ────────────────────────────────────────────────────────────────────────────
-import { getUsers, saveUsers, getOrders, saveOrders, type User, type Order, type UserRole } from "./storage";
+import { getUsers, saveUsers, getOrders, saveOrders, broadcastStorageChange, type User, type Order, type UserRole } from "./storage";
 
 // ─── Reseller / Pro / Elite Tier System ────────────────────────────────────
 export type TierRole = "reseller" | "pro" | "elite";
@@ -144,6 +144,7 @@ export function getMaintenance(): MaintenanceConfig {
 export function setMaintenance(cfg: Partial<MaintenanceConfig>) {
   const merged = { ...getMaintenance(), ...cfg };
   localStorage.setItem(MAINT_KEY, JSON.stringify(merged));
+  broadcastStorageChange(MAINT_KEY);
   pushActivity("system", `Maintenance ${merged.enabled ? "ON" : "OFF"}`);
   return merged;
 }
@@ -164,6 +165,7 @@ export function getScheduledAnnouncements(): ScheduledAnnouncement[] {
 }
 export function saveScheduledAnnouncements(list: ScheduledAnnouncement[]) {
   localStorage.setItem(SCHED_KEY, JSON.stringify(list));
+  broadcastStorageChange(SCHED_KEY);
 }
 export function addScheduledAnnouncement(data: Omit<ScheduledAnnouncement, "id" | "createdAt">) {
   const all = getScheduledAnnouncements();
@@ -209,8 +211,9 @@ export function pushActivity(
     at: new Date().toISOString(),
   });
   localStorage.setItem(ACTIVITY_KEY, JSON.stringify(all.slice(0, ACTIVITY_MAX)));
+  broadcastStorageChange(ACTIVITY_KEY);
 }
-export function clearActivityLog() { localStorage.removeItem(ACTIVITY_KEY); }
+export function clearActivityLog() { localStorage.removeItem(ACTIVITY_KEY); broadcastStorageChange(ACTIVITY_KEY); }
 
 // ─── Banned Users + Tags + Bonus + Devices ────────────────────────────────
 export interface UserExt {
@@ -324,7 +327,7 @@ type NotifMap = Record<string, AppNotif[]>;
 function getNotifMap(): NotifMap {
   try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || "{}"); } catch { return {}; }
 }
-function saveNotifMap(m: NotifMap) { localStorage.setItem(NOTIF_KEY, JSON.stringify(m)); }
+function saveNotifMap(m: NotifMap) { localStorage.setItem(NOTIF_KEY, JSON.stringify(m)); broadcastStorageChange(NOTIF_KEY); }
 export function getUserNotifs(userId: string): AppNotif[] {
   return (getNotifMap()[userId] || []).slice(0, 100);
 }
@@ -532,6 +535,7 @@ export function importDatabase(snap: BackupSnapshot): { ok: boolean; restored: n
   for (const [k, v] of Object.entries(snap.data)) {
     if (!PINZ_KEYS.includes(k)) continue;
     localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
+    broadcastStorageChange(k);
     count++;
   }
   pushActivity("admin", `Database diimpor (${count} key)`);
