@@ -26,7 +26,6 @@ export default function ProductDetail() {
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
   const [playerId, setPlayerId] = useState("");
   const [zoneId, setZoneId] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
   
   if (!product) {
     return (
@@ -54,11 +53,6 @@ export default function ProductDetail() {
       toast({ title: "Error", description: "Pilih metode pembayaran terlebih dahulu", variant: "destructive" });
       return;
     }
-    if (!whatsapp) {
-      toast({ title: "Error", description: "Nomor WhatsApp wajib diisi", variant: "destructive" });
-      return;
-    }
-
     // Simulate purchase
     toast({ 
       title: "Pesanan Dibuat!", 
@@ -138,7 +132,6 @@ export default function ProductDetail() {
               <ol className="text-sm text-muted-foreground space-y-3 list-decimal list-inside pl-2">
                 <li>Masukkan ID / Data akun dengan benar</li>
                 <li>Pilih metode pembayaran yang diinginkan</li>
-                <li>Masukkan nomor WhatsApp untuk notifikasi</li>
                 <li>Klik Beli Sekarang dan selesaikan pembayaran</li>
                 <li>Pesanan akan diproses otomatis dalam 1-5 detik</li>
               </ol>
@@ -243,20 +236,6 @@ export default function ProductDetail() {
               </div>
               
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="whatsapp">Nomor WhatsApp</Label>
-                  <Input 
-                    id="whatsapp" 
-                    placeholder="Contoh: 081234567890" 
-                    className="h-12 bg-background border-border focus-visible:ring-primary"
-                    value={whatsapp}
-                    onChange={(e) => setWhatsapp(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Bukti pembayaran dan status pesanan akan dikirim ke WhatsApp ini.
-                  </p>
-                </div>
-
                 <div className="p-4 bg-muted/30 border border-border rounded-xl space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Harga Produk</span>

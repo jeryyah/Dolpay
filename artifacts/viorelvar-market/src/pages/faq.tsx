@@ -35,7 +35,7 @@ const HOW_TO_BUY = [
   {
     step: 6,
     title: "Cek Transaksi",
-    desc: "Kamu bisa cek status pesanan di menu 'Cek Transaksi'. Kalau ada kendala, hubungi support kami via WhatsApp atau Telegram.",
+    desc: "Kamu bisa cek status pesanan di menu 'Cek Transaksi'. Kalau ada kendala, hubungi support kami via Telegram.",
   },
 ];
 
@@ -75,7 +75,7 @@ const FAQS = [
   { q: "Apakah ada refund jika saya salah input ID?", a: "Tidak ada refund untuk kesalahan input data. Pastikan ID/Username kamu benar sebelum melakukan pembayaran." },
   { q: "Metode pembayaran apa saja yang tersedia?", a: "Kami menerima QRIS, DANA, GoPay, BCA Virtual Account, dan Mandiri Virtual Account." },
   { q: "Apakah transaksi di sini aman?", a: "Ya, semua transaksi dilindungi enkripsi SSL. Data pembayaran kamu tidak kami simpan." },
-  { q: "Bagaimana jika pesanan saya gagal?", a: "Jika item tidak masuk dalam 10 menit, hubungi support via WhatsApp atau Telegram dengan menyertakan nomor transaksi kamu." },
+  { q: "Bagaimana jika pesanan saya gagal?", a: "Jika item tidak masuk dalam 10 menit, hubungi support via Telegram dengan menyertakan nomor transaksi kamu." },
   { q: "Apakah ada biaya tambahan?", a: "Tergantung metode pembayaran. QRIS, DANA, dan GoPay bebas biaya. Transfer bank dikenakan biaya admin Rp 4.000." },
 ];
 

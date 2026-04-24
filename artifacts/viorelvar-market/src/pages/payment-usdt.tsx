@@ -8,6 +8,7 @@ import {
   validateCoupon, redeemCoupon, getOrders, saveOrders,
   type Order,
 } from "@/lib/storage";
+import { useStorageVersion } from "@/lib/use-live-storage";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 
@@ -15,7 +16,9 @@ const IDR_TO_USD_RATE = 16200;
 
 export default function PaymentBinance() {
   const { user } = useAuth();
-  const settings = getPaymentSettings();
+  // Re-render setiap kali admin update settings — tanpa reload halaman.
+  const storageVer = useStorageVersion();
+  const settings = React.useMemo(() => getPaymentSettings(), [storageVer]);
   const BINANCE_ID = settings.binancePayId || "478829361";
   const BINANCE_QR_DATA = `binance://pay?binanceId=${BINANCE_ID}`;
   const { id } = useParams<{ id: string }>();

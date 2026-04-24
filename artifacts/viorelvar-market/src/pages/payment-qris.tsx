@@ -8,9 +8,10 @@ import {
 import { BackButton } from "@/components/back-button";
 import {
   getOrderById, submitQrisProof, getPaymentSettings,
-  validateCoupon, redeemCoupon, getOrders, saveOrders,
+  validateCoupon, redeemCoupon, getOrders, saveOrders, deleteOrder,
   type Order,
 } from "@/lib/storage";
+import { useStorageVersion } from "@/lib/use-live-storage";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 
@@ -40,7 +41,9 @@ export default function PaymentQRIS() {
 
   const qrWrapperRef = useRef<HTMLDivElement | null>(null);
 
-  const settings = getPaymentSettings();
+  // Re-render setiap kali admin update settings/QRIS — tanpa reload halaman.
+  const storageVer = useStorageVersion();
+  const settings = React.useMemo(() => getPaymentSettings(), [storageVer]);
 
   useEffect(() => {
     const o = getOrderById(id);
@@ -462,7 +465,14 @@ export default function PaymentQRIS() {
                 "✓ Kirim Bukti & Konfirmasi"
               )}
             </button>
-            <button onClick={() => navigate("/")} className="w-full py-2.5 text-center text-sm text-muted-foreground hover:text-foreground transition-colors mt-2">
+            <button
+              onClick={() => {
+                // Hapus order pending agar riwayat ikut hilang otomatis.
+                if (order?.id) deleteOrder(order.id);
+                navigate("/");
+              }}
+              className="w-full py-2.5 text-center text-sm text-muted-foreground hover:text-foreground transition-colors mt-2"
+            >
               Batalkan Pesanan
             </button>
           </div>

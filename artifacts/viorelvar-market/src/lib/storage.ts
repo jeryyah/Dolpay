@@ -52,6 +52,17 @@ export interface Order {
 
 const IDR_TO_USD_RATE = 16200;
 
+// ─── Realtime broadcast (semua perubahan localStorage) ──────────────────
+// Dipakai oleh useLiveStorage() di lib/use-live-storage.ts supaya halaman
+// pembeli (katalog, harga, settings, riwayat, dll) auto-refresh setiap
+// admin menyimpan sesuatu — tanpa perlu reload manual.
+export const STORAGE_EVENT = "pinz:storage";
+export function broadcastStorageChange(key?: string): void {
+  try {
+    window.dispatchEvent(new CustomEvent(STORAGE_EVENT, { detail: { key } }));
+  } catch {}
+}
+
 // ─── Security: Session Token ───────────────────────────────────────────────
 export function generateSessionToken(): string {
   const arr = new Uint8Array(24);
@@ -155,6 +166,7 @@ export function getUsers(): User[] {
 
 export function saveUsers(users: User[]) {
   localStorage.setItem("pinz_users", JSON.stringify(users));
+  broadcastStorageChange("pinz_users");
 }
 
 export function findUser(username: string): User | undefined {
@@ -222,7 +234,10 @@ export function getOrders(): Order[] {
   if (dirty) localStorage.setItem("pinz_orders", JSON.stringify(list));
   return list;
 }
-export function saveOrders(orders: Order[]) { localStorage.setItem("pinz_orders", JSON.stringify(orders)); }
+export function saveOrders(orders: Order[]) {
+  localStorage.setItem("pinz_orders", JSON.stringify(orders));
+  broadcastStorageChange("pinz_orders");
+}
 export function getOrderById(id: string): Order | undefined { return getOrders().find((o) => o.id === id); }
 export function getUserOrders(userId: string): Order[] { return getOrders().filter((o) => o.userId === userId); }
 
@@ -275,7 +290,10 @@ export function getStockMap(): StockMap {
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
-export function saveStockMap(map: StockMap) { localStorage.setItem("pinz_stock", JSON.stringify(map)); }
+export function saveStockMap(map: StockMap) {
+  localStorage.setItem("pinz_stock", JSON.stringify(map));
+  broadcastStorageChange("pinz_stock");
+}
 
 export function getStockKeys(productId: string, variantId: string): string[] {
   return getStockMap()[`${productId}:${variantId}`] || [];
@@ -327,6 +345,7 @@ export function getProductOverrides(): ProductOverrideMap {
 }
 export function saveProductOverrides(map: ProductOverrideMap) {
   localStorage.setItem("pinz_product_overrides", JSON.stringify(map));
+  broadcastStorageChange("pinz_product_overrides");
 }
 export function setProductOverride(productId: string, override: ProductOverride) {
   const map = getProductOverrides();
@@ -358,6 +377,7 @@ export function getExtraProducts(): Product[] {
 }
 export function saveExtraProducts(list: Product[]) {
   localStorage.setItem("pinz_extra_products", JSON.stringify(list));
+  broadcastStorageChange("pinz_extra_products");
 }
 export function addExtraProduct(p: Omit<Product, "soldCount"> & { soldCount?: number }): Product {
   const newP: Product = {
@@ -453,6 +473,7 @@ export function getCategories(): CategoryDef[] {
 
 export function saveCategories(list: CategoryDef[]) {
   localStorage.setItem("pinz_categories", JSON.stringify(list));
+  broadcastStorageChange("pinz_categories");
 }
 
 export function addCategory(label: string): CategoryDef | null {
@@ -514,6 +535,7 @@ export function getPublishers(): string[] {
 
 export function savePublishers(list: string[]) {
   localStorage.setItem("pinz_publishers", JSON.stringify(list));
+  broadcastStorageChange("pinz_publishers");
 }
 
 export function addPublisher(name: string): boolean {
@@ -628,7 +650,7 @@ export function adminRejectOrder(orderId: string): Order | null {
 
 export function deleteOrder(orderId: string): void {
   const orders = getOrders().filter((o) => o.id !== orderId);
-  saveOrders(orders);
+  saveOrders(orders); // saveOrders sudah broadcast otomatis
 }
 
 export function deleteUser(userId: string): void {
@@ -652,6 +674,7 @@ export function getAnnouncement(): string { return localStorage.getItem("pinz_an
 export function setAnnouncement(msg: string): void {
   if (msg.trim()) localStorage.setItem("pinz_announcement", msg.trim());
   else localStorage.removeItem("pinz_announcement");
+  broadcastStorageChange("pinz_announcement");
 }
 
 export interface Broadcast {
@@ -746,6 +769,7 @@ export function setPaymentSettings(s: Partial<PaymentSettings>): PaymentSettings
   // Save the slim settings (without inline base64) to the main key.
   const slim = { ...merged, qrisImageBase64: "", binanceQrBase64: "" };
   safeSetItem("pinz_payment_settings", JSON.stringify(slim));
+  broadcastStorageChange("pinz_payment_settings");
   return merged;
 }
 
@@ -999,6 +1023,7 @@ export function getCoupons(): Coupon[] {
 
 export function saveCoupons(list: Coupon[]) {
   localStorage.setItem(COUPONS_KEY, JSON.stringify(list));
+  broadcastStorageChange(COUPONS_KEY);
 }
 
 export function upsertCoupon(c: Omit<Coupon, "createdAt" | "totalRedemptions" | "redemptions"> & Partial<Pick<Coupon, "createdAt" | "totalRedemptions" | "redemptions">>): Coupon {

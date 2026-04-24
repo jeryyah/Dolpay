@@ -395,7 +395,13 @@ export default function History() {
 
   const refresh = () => {
     if (user) {
-      setOrders(getUserOrders(user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      // Sembunyikan order yang dibatalkan supaya riwayat pembeli ikut hilang
+      // otomatis ketika ia menekan tombol Batalkan Pesanan.
+      setOrders(
+        getUserOrders(user.id)
+          .filter((o) => o.status !== "cancelled")
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      );
     }
     // "All Pembelian" = pembelian SUKSES dari pengguna nyata (paid / verified),
     // diurutkan terbaru. Kita TIDAK menggabungkan order dummy di sini supaya
@@ -412,9 +418,13 @@ export default function History() {
     refresh();
     const onPurchase = () => refresh();
     window.addEventListener("pinz_new_purchase", onPurchase);
+    // Sinkron real-time setiap kali admin/buyer menyimpan apa pun (verifikasi
+    // bukti transfer, batalkan pesanan, ubah harga, dll).
+    window.addEventListener("pinz:storage", onPurchase);
     const t = setInterval(refresh, 15000);
     return () => {
       window.removeEventListener("pinz_new_purchase", onPurchase);
+      window.removeEventListener("pinz:storage", onPurchase);
       clearInterval(t);
     };
   }, [user]);

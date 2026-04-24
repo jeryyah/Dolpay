@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getAnnouncement, getUserLevel, getUserOrders, warrantyInfo } from "@/lib/storage";
+import { useStorageVersion } from "@/lib/use-live-storage";
 import { useAuth } from "@/lib/auth-context";
 import { formatCurrency } from "@/lib/utils";
 import { getUserExt, getWishlist, getUserNotifs } from "@/lib/extra-storage";
@@ -249,11 +250,14 @@ export default function Home() {
   const [announceDismissed, setAnnounceDismissed] = useState(false);
   const { t } = useTranslation();
 
+  // Re-render real-time setiap kali admin ubah pengumuman / kategori / harga.
+  const storageVer = useStorageVersion();
+
   useEffect(() => {
     setAnnouncement(getAnnouncement());
-  }, []);
+  }, [storageVer]);
 
-  const dynamicCats = getCategories();
+  const dynamicCats = React.useMemo(() => getCategories(), [storageVer]);
   const CATEGORIES: { id: ProductCategory | "all"; label: string; icon: React.ReactNode }[] = [
     { id: "all", label: t("cat_all"), icon: <Zap className="w-4 h-4" /> },
     ...dynamicCats.map((c) => ({
