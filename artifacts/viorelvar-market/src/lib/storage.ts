@@ -689,7 +689,9 @@ const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   binancePayId: "478829361",
   binanceQrBase64: "",
   gatewayApiKey: "",
-  gatewayBaseUrl: "https://api.viorelvar-pay.io",
+  // Rama Shop public API base. Strip trailing /api/public if user pasted it —
+  // we always append it ourselves below in buildGatewayUrl().
+  gatewayBaseUrl: "https://ramashop.my.id",
   gatewayEnabled: false,
 };
 
@@ -1323,7 +1325,7 @@ export interface DepositStatusResponse {
 }
 
 // Bound every gateway request so a non-responsive host can't hang the UI.
-const GATEWAY_TIMEOUT_MS = 8000;
+const GATEWAY_TIMEOUT_MS = 12000;
 
 async function fetchWithTimeout(
   url: string,
@@ -1349,6 +1351,38 @@ async function fetchWithTimeout(
 }
 
 /**
+ * Build the full Rama public-API URL from the user-supplied base URL.
+ * Accepts:  https://ramashop.my.id
+ *           https://ramashop.my.id/
+ *           https://ramashop.my.id/api/public
+ *           https://ramashop.my.id/api/public/
+ * Always returns:  https://ramashop.my.id/api/public/<path>
+ */
+function buildGatewayUrl(base: string, path: string): string {
+  let b = base.trim().replace(/\/+$/, "");
+  if (!/\/api\/public$/i.test(b)) b = `${b}/api/public`;
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${b}${p}`;
+}
+
+/**
+ * Rama responses always wrap the payload in either { success, data, message }
+ * or { status, data, message }. Unwrap and surface the message on errors.
+ */
+function unwrapGateway<T>(json: any): T {
+  if (json && typeof json === "object") {
+    const ok = json.success === true || json.status === true;
+    if (!ok) {
+      const msg = json.message || json.error || "Gateway menolak permintaan";
+      throw new Error(`Gateway: ${msg}`);
+    }
+    if (json.data && typeof json.data === "object") return json.data as T;
+  }
+  // Some envelopes return the payload at the root.
+  return json as T;
+}
+
+/**
  * Create a deposit via the configured payment gateway. When the gateway is
  * disabled or no API key is set, a deterministic local simulation is returned
  * so the QRIS flow keeps working offline.
@@ -1359,20 +1393,33 @@ export async function createDeposit(
 ): Promise<DepositCreateResponse> {
   const s = getPaymentSettings();
   if (s.gatewayEnabled && s.gatewayApiKey && s.gatewayBaseUrl) {
-    const res = await fetchWithTimeout(
-      `${s.gatewayBaseUrl.replace(/\/$/, "")}/deposit/create`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": s.gatewayApiKey,
-          Authorization: `Bearer ${s.gatewayApiKey}`,
-        },
-        body: JSON.stringify({ amount, method }),
+    const url = buildGatewayUrl(s.gatewayBaseUrl, "/deposit/create");
+    const res = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-API-Key": s.gatewayApiKey,
       },
-    );
-    if (!res.ok) throw new Error(`Gateway ${res.status}`);
-    return (await res.json()) as DepositCreateResponse;
+      body: JSON.stringify({ amount, method }),
+    });
+    let json: any = null;
+    try { json = await res.json(); } catch { /* non-JSON body */ }
+    if (!res.ok) {
+      const msg = json?.message || json?.error || `HTTP ${res.status}`;
+      throw new Error(`Gateway: ${msg}`);
+    }
+    const data = unwrapGateway<any>(json);
+    return {
+      depositId: String(data.depositId ?? data.id ?? ""),
+      uniqueCode: Number(data.uniqueCode ?? 0),
+      totalAmount: Number(data.totalAmount ?? data.amount ?? amount),
+      qrImage: String(data.qrImage ?? ""),
+      qrString: String(data.qrString ?? ""),
+      expiredAt: String(
+        data.expiredAt ?? new Date(Date.now() + 15 * 60_000).toISOString(),
+      ),
+    };
   }
   // Local simulation — used when no gateway is configured.
   const uniqueCode = Math.floor(100 + Math.random() * 900);
@@ -1393,18 +1440,38 @@ export async function createDeposit(
 export async function getDepositStatus(depositId: string): Promise<DepositStatusResponse> {
   const s = getPaymentSettings();
   if (s.gatewayEnabled && s.gatewayApiKey && s.gatewayBaseUrl) {
+    const url = buildGatewayUrl(
+      s.gatewayBaseUrl,
+      `/deposit/status/${encodeURIComponent(depositId)}`,
+    );
     const res = await fetchWithTimeout(
-      `${s.gatewayBaseUrl.replace(/\/$/, "")}/api/public/deposit/status/${encodeURIComponent(depositId)}`,
+      url,
       {
         headers: {
+          Accept: "application/json",
           "X-API-Key": s.gatewayApiKey,
-          Authorization: `Bearer ${s.gatewayApiKey}`,
         },
       },
-      5000, // shorter timeout for polling
+      6000, // shorter timeout for polling
     );
-    if (!res.ok) throw new Error(`Gateway ${res.status}`);
-    return (await res.json()) as DepositStatusResponse;
+    let json: any = null;
+    try { json = await res.json(); } catch { /* non-JSON */ }
+    if (!res.ok) {
+      const msg = json?.message || json?.error || `HTTP ${res.status}`;
+      throw new Error(`Gateway: ${msg}`);
+    }
+    const data = unwrapGateway<any>(json);
+    const raw = String(data.status ?? "pending").toLowerCase();
+    const status: DepositStatusResponse["status"] =
+      raw === "success" || raw === "paid" ? "success" :
+      raw === "already" || raw === "duplicate" ? "already" :
+      "pending";
+    return {
+      status,
+      depositId,
+      amount: data.paidAmount ?? data.amount,
+      paidAt: data.paidAt,
+    };
   }
   return { status: "pending", depositId };
 }

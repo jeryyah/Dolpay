@@ -206,17 +206,23 @@ export default function PaymentQRIS() {
   const mins = String(Math.floor(timeLeft / 60)).padStart(2, "0");
   const secs = String(timeLeft % 60).padStart(2, "0");
 
-  const qrFallbackValue = order && deposit
+  // Prefer the raw EMV/QRIS payload from the gateway — when present, we render
+  // it locally as an SVG QR which is always scannable. Falls back to a synthetic
+  // payload for the local-simulation mode.
+  const qrFallbackValue = order && deposit?.qrString
     ? deposit.qrString
     : order
       ? `QRIS.PAYMENT|ORDERID:${order.id}|AMOUNT:${orderTotal}`
       : "";
 
   // Choose which QR image source to render.
-  //  1. Gateway-provided qrImage when gateway mode is on.
-  //  2. Admin-uploaded static QRIS image (settings.qrisImageBase64).
-  //  3. Generated SVG QR (fallback) using qrFallbackValue.
+  //  1. If gateway returned a real qrString → render SVG locally (most reliable).
+  //  2. If gateway returned only a remote qrImage URL → use that image.
+  //  3. Admin-uploaded static QRIS image (settings.qrisImageBase64).
+  //  4. Generated SVG QR (fallback) using qrFallbackValue.
+  const useLocalSvg = gatewayMode && !!deposit?.qrString;
   const qrImageSrc =
+    useLocalSvg ? "" :
     (gatewayMode && deposit?.qrImage) ? deposit.qrImage :
     settings.qrisImageBase64 ? settings.qrisImageBase64 :
     "";

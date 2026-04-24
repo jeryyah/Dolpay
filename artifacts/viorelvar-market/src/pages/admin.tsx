@@ -728,13 +728,35 @@ export default function Admin() {
                   </label>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-1 block">Gateway Base URL</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Gateway Base URL</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Auto-fill with the local proxy URL (api-server). Works in
+                        // dev (same Replit dev domain) and in production when the
+                        // api-server artifact is reachable from the same origin.
+                        const origin = window.location.origin;
+                        setPaySettings({ ...paySettings, gatewayBaseUrl: `${origin}/api/rama` });
+                      }}
+                      className="text-[10px] font-bold text-primary hover:underline"
+                    >
+                      Pakai proxy lokal →
+                    </button>
+                  </div>
                   <input
                     value={paySettings.gatewayBaseUrl}
                     onChange={(e) => setPaySettings({ ...paySettings, gatewayBaseUrl: e.target.value })}
-                    placeholder="https://api.viorelvar-pay.io"
+                    placeholder="https://ramashop.my.id"
                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono"
                   />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Dua mode:&nbsp;
+                    <strong>Langsung</strong> → <code className="font-mono">https://ramashop.my.id</code>
+                    &nbsp;(perlu Rama membuka CORS untuk domain Anda).&nbsp;
+                    <strong>Proxy</strong> → klik <em>"Pakai proxy lokal"</em>
+                    untuk meneruskan lewat api-server (selalu aman dari CORS).
+                  </p>
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
