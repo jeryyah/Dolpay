@@ -143,6 +143,18 @@ export default function Admin() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const synthRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Sinyal dari AdminChatNotifier (klik toast notif chat) — langsung
+  // pindah ke tab Chat begitu admin masuk halaman /admin.
+  useEffect(() => {
+    try {
+      const want = localStorage.getItem("pinz_admin_open_tab");
+      if (want === "chat") {
+        setActiveTab("chat" as AdminTab);
+        localStorage.removeItem("pinz_admin_open_tab");
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!user || (user.role !== "admin" && user.role !== "owner")) {
       navigate("/login");

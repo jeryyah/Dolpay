@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { BroadcastNotification } from "@/components/broadcast-notification";
+import { AdminChatNotifier } from "@/components/admin-chat-notifier";
 import { LivePurchaseToast } from "@/components/live-purchase-toast";
 import { UpdateBanner } from "@/components/update-banner";
 import { seedDummyOrdersIfEmpty } from "@/lib/seed-dummy";
@@ -165,6 +166,7 @@ function App() {
           </WouterRouter>
           <Toaster />
           <BroadcastNotification />
+          <AdminChatNotifier />
           <UpdateBanner />
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <LivePurchaseToast />
