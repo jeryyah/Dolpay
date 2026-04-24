@@ -37,8 +37,19 @@ The `viorelvar-market` artifact is deployed to Netlify using `netlify.toml` at t
 - SPA fallback: all unmatched paths redirect to `/index.html` (status 200) so client-side routing works.
 - `/api/*` requests are proxied to an externally-hosted API server via the first redirect rule in `netlify.toml` (with `force = true` so it wins over the SPA catch-all). Replace `https://your-api-host.example.com` with the real Render/Railway/Fly URL of the API host before deploying. Same-origin from the browser → no CORS preflight.
 
-### Frontend env vars (set in Netlify → Site → Site configuration → Environment variables)
+### Frontend env vars (already set in `netlify.toml`)
 
-- `VITE_DOWNLOAD_URL` (optional) — absolute URL the admin "Download Project" button should point to (e.g. a CDN, R2, or GitHub Release asset). When unset, the button auto-generates an absolute URL using `window.location.origin + BASE_URL + viorelvar-project.tar.gz`, so it always points back at the deployed site.
+- `SKIP_BUNDLE = "1"` — tells `scripts/generate-version.mjs` to write `version.json` only and skip producing the heavy `viorelvar-project.tar.gz` archive on hosted builds. The script also auto-detects `NETLIFY === "true"` (set by Netlify itself) as an additional safety net.
+- `VITE_DOWNLOAD_URL` — absolute URL the admin "Download Project" button points to. Currently set to the `v1.0.0` GitHub Release asset on `jeryyah/Dolpay`. When unset, the button falls back to `window.location.origin + BASE_URL + viorelvar-project.tar.gz` (which only works in local dev where the bundle is generated).
+
+### Updating the downloadable bundle
+
+When you cut a new release of the project source bundle:
+
+1. Locally run `pnpm --filter @workspace/viorelvar-market run build` (without `SKIP_BUNDLE`) to regenerate `public/viorelvar-project.tar.gz`.
+2. Create a new GitHub Release on `jeryyah/Dolpay` (e.g. `v1.1.0`) and upload the new tar.gz as a release asset.
+3. Update `VITE_DOWNLOAD_URL` in `netlify.toml` to point at the new release URL, commit, push. Netlify auto-redeploys.
+
+The local `artifacts/viorelvar-market/public/viorelvar-project.tar.gz` is gitignored so it never gets committed back to the repo.
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

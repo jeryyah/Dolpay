@@ -6,6 +6,12 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--version"
   PNPM_FLAGS = "--shamefully-hoist"
+  # Skip bundling viorelvar-project.tar.gz into the publish dir; it's served
+  # from a GitHub Release instead (see VITE_DOWNLOAD_URL below).
+  SKIP_BUNDLE = "1"
+  # Admin "Download Project" button points to the GitHub Release asset so we
+  # don't burn Netlify bandwidth on the 24 MB archive.
+  VITE_DOWNLOAD_URL = "https://github.com/jeryyah/Dolpay/releases/download/v1.0.0/viorelvar-project.tar.gz"
 
 [[headers]]
   for = "/version.json"

@@ -18,6 +18,39 @@ if (existsSync(bundlePath)) {
   rmSync(bundlePath);
 }
 
+// On hosted builds (Netlify, etc.) we do NOT bundle the project tar.gz into the
+// publish directory — it bloats the build, eats CDN bandwidth, and is shipped
+// out-of-band as a GitHub Release asset instead. Set `VITE_DOWNLOAD_URL` to the
+// release asset URL so the admin Download button points to it.
+const skipBundle =
+  process.env.SKIP_BUNDLE === "1" ||
+  process.env.SKIP_BUNDLE === "true" ||
+  process.env.NETLIFY === "true";
+
+if (skipBundle) {
+  const version =
+    process.env.APP_VERSION ||
+    process.env.COMMIT_REF?.slice(0, 12) ||
+    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ||
+    `v-${Date.now()}`;
+  writeFileSync(
+    versionPath,
+    JSON.stringify(
+      {
+        version,
+        builtAt: new Date().toISOString(),
+        bundleName,
+        bundleSize: 0,
+        bundleSource: "external",
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  console.log(`[generate-version] ${version} · bundle skipped (SKIP_BUNDLE / NETLIFY)`);
+  process.exit(0);
+}
+
 const excludes = [
   "node_modules",
   "dist",
