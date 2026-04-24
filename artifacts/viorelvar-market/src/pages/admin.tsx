@@ -27,7 +27,7 @@ import { getRoleBadge as roleBadge } from "@/lib/extra-storage";
 import { PRODUCTS, type Product, type ProductCategory } from "@/data/products";
 import { formatCurrency } from "@/lib/utils";
 import {
-  ShieldCheck, Clock, CheckCircle, XCircle, RefreshCw, Eye, EyeOff, Zap, LogOut,
+  ShieldCheck, Clock, CheckCircle, XCircle, RefreshCw, Eye, Zap, LogOut,
   Download, Search, Users, Megaphone, Trash2, Ban, TrendingUp, FileDown,
   Send, Radio, Info, Settings as SettingsIcon, Package, Bell, KeyRound,
   Image as ImageIcon, Plus, X, Tag, Percent,
@@ -140,8 +140,6 @@ export default function Admin() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [paySettings, setPaySettings] = useState<PaymentSettings>(getPaymentSettings());
   const [paySaved, setPaySaved] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKeyCopied, setApiKeyCopied] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const synthRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -684,7 +682,7 @@ export default function Admin() {
         {/* SETTINGS — Payment + Products */}
         {activeTab === "settings" && (
           <div className="space-y-5">
-            {/* Payment Gateway */}
+            {/* Pengaturan Pembayaran (QRIS Manual) */}
             <div className="bg-card/80 backdrop-blur border border-border rounded-2xl p-5 space-y-4">
               <p className="font-bold text-sm flex items-center gap-2"><SettingsIcon className="w-4 h-4 text-primary" />Pengaturan Pembayaran</p>
 
@@ -711,98 +709,15 @@ export default function Admin() {
                 />
               </div>
 
-              <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold">Payment Gateway API (QRIS Otomatis)</p>
-                    <p className="text-[11px] text-muted-foreground">Aktifkan untuk menerima deposit QRIS lewat API gateway. Biarkan nonaktif untuk mode QR statis.</p>
-                  </div>
-                  <label className="inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={paySettings.gatewayEnabled}
-                      onChange={(e) => setPaySettings({ ...paySettings, gatewayEnabled: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-10 h-5 bg-muted rounded-full peer-checked:bg-primary relative transition-all after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5" />
-                  </label>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Gateway Base URL</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Auto-fill with the local proxy URL (api-server). Works in
-                        // dev (same Replit dev domain) and in production when the
-                        // api-server artifact is reachable from the same origin.
-                        const origin = window.location.origin;
-                        setPaySettings({ ...paySettings, gatewayBaseUrl: `${origin}/api/rama` });
-                      }}
-                      className="text-[10px] font-bold text-primary hover:underline"
-                    >
-                      Pakai proxy lokal →
-                    </button>
-                  </div>
-                  <input
-                    value={paySettings.gatewayBaseUrl}
-                    onChange={(e) => setPaySettings({ ...paySettings, gatewayBaseUrl: e.target.value })}
-                    placeholder="https://ramashop.my.id"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Dua mode:&nbsp;
-                    <strong>Langsung</strong> → <code className="font-mono">https://ramashop.my.id</code>
-                    &nbsp;(perlu Rama membuka CORS untuk domain Anda).&nbsp;
-                    <strong>Proxy</strong> → klik <em>"Pakai proxy lokal"</em>
-                    untuk meneruskan lewat api-server (selalu aman dari CORS).
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                      X-API-Key (Rama API)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowApiKey((v) => !v)}
-                      className="text-[10px] text-primary font-bold inline-flex items-center gap-1 hover:underline"
-                    >
-                      {showApiKey ? <><EyeOff className="w-3 h-3" /> Sembunyikan</> : <><Eye className="w-3 h-3" /> Tampilkan</>}
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showApiKey ? "text" : "password"}
-                      value={paySettings.gatewayApiKey}
-                      onChange={(e) => setPaySettings({ ...paySettings, gatewayApiKey: e.target.value })}
-                      placeholder="your_api_key_here"
-                      spellCheck={false}
-                      autoComplete="off"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!paySettings.gatewayApiKey) return;
-                        try {
-                          await navigator.clipboard.writeText(paySettings.gatewayApiKey);
-                          setApiKeyCopied(true);
-                          setTimeout(() => setApiKeyCopied(false), 1500);
-                        } catch {}
-                      }}
-                      className="absolute right-1 top-1 bottom-1 px-2 rounded-md text-[10px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted"
-                    >
-                      {apiKeyCopied ? "✓ Tersalin" : "Salin"}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Header yang dikirim: <code className="font-mono">X-API-Key: {paySettings.gatewayApiKey ? (showApiKey ? paySettings.gatewayApiKey : "•".repeat(Math.min(20, paySettings.gatewayApiKey.length))) : "your_api_key_here"}</code>
-                  </p>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Endpoint dipakai: <code className="font-mono">POST /deposit/create</code> ·
-                  <code className="font-mono">GET /api/public/deposit/status/{"{depositId}"}</code>
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <p className="text-sm font-bold mb-1">QRIS Manual</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Mode pembayaran QRIS sepenuhnya <strong>manual</strong>. Pembeli scan
+                  gambar QR statis di atas, transfer sesuai total + kode unik, lalu klik
+                  <em> "Saya Sudah Membayar"</em>. Anda cek mutasi e-wallet / m-banking
+                  lalu konfirmasi pesanan secara manual dari tab <strong>Order</strong>.
+                  Tidak ada API gateway pihak ketiga — tidak perlu API key, tidak perlu
+                  konfigurasi proxy.
                 </p>
               </div>
 

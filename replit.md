@@ -35,7 +35,7 @@ The `viorelvar-market` artifact is deployed to Netlify using `netlify.toml` at t
 - Publish directory: `artifacts/viorelvar-market/dist/public`
 - Node version: `20` (set via `[build.environment] NODE_VERSION`); pnpm version comes from the root `package.json` `packageManager` field via Corepack.
 - SPA fallback: all unmatched paths redirect to `/index.html` (status 200) so client-side routing works.
-- **No backend deployment needed.** The `viorelvar-market` artifact is fully client-side: app state lives in browser `localStorage` (`src/lib/storage.ts`), and the payment gateway is called directly from the browser to the URL admin configures in Settings → Gateway (`gatewayBaseUrl`). The `api-server` artifact in this monorepo is unused scaffold and is not deployed anywhere.
+- **No backend deployment needed.** The `viorelvar-market` artifact is fully client-side: app state lives in browser `localStorage` (`src/lib/storage.ts`). Pembayaran QRIS pakai mode **manual sepenuhnya** — admin upload satu gambar QRIS statis di Pengaturan, pembeli scan dan transfer, lalu klik "Saya Sudah Membayar". Tidak ada integrasi gateway pihak ketiga (Rama API dll sudah dihapus). The `api-server` artifact in this monorepo is unused scaffold and is not deployed anywhere.
 
 ### Frontend env vars (already set in `netlify.toml`)
 

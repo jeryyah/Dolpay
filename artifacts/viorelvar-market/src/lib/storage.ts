@@ -674,25 +674,20 @@ export function hasBroadcastBeenSeen(broadcastId: string): boolean { return loca
 export function markBroadcastSeen(broadcastId: string): void { localStorage.setItem("pinz_broadcast_seen", broadcastId); }
 
 // ─── Payment Settings ──────────────────────────────────────────────────────
+// Mode QRIS sepenuhnya MANUAL: admin upload satu gambar QRIS statis,
+// pembeli scan, lalu klik "Saya Sudah Membayar" untuk konfirmasi.
+// Tidak ada integrasi gateway pihak ketiga (Rama API dll).
 export interface PaymentSettings {
   qrisImageBase64: string;
   qrisMerchantName?: string; // deprecated, kept for backward-compat
   binancePayId: string;
   binanceQrBase64: string;
-  gatewayApiKey: string;
-  gatewayBaseUrl: string;
-  gatewayEnabled: boolean;
 }
 
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   qrisImageBase64: "",
   binancePayId: "478829361",
   binanceQrBase64: "",
-  gatewayApiKey: "",
-  // Rama Shop public API base. Strip trailing /api/public if user pasted it —
-  // we always append it ourselves below in buildGatewayUrl().
-  gatewayBaseUrl: "https://ramashop.my.id",
-  gatewayEnabled: false,
 };
 
 // QR images are large base64 blobs that can blow past the localStorage quota
@@ -1307,7 +1302,7 @@ export function replaceKey(orderId: string): { ok: boolean; error?: string; newK
   return { ok: true, newKey };
 }
 
-// ─── Payment Gateway (Deposit API) ─────────────────────────────────────────
+// ─── Deposit (QRIS Manual) ─────────────────────────────────────────────────
 export interface DepositCreateResponse {
   depositId: string;
   uniqueCode: number;
@@ -1324,104 +1319,17 @@ export interface DepositStatusResponse {
   paidAt?: string;
 }
 
-// Bound every gateway request so a non-responsive host can't hang the UI.
-const GATEWAY_TIMEOUT_MS = 12000;
-
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs = GATEWAY_TIMEOUT_MS,
-): Promise<Response> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } catch (e: any) {
-    if (e?.name === "AbortError") {
-      throw new Error(`Gateway timeout (${timeoutMs / 1000}s) — host tidak merespons`);
-    }
-    throw new Error(
-      e?.message?.includes("Failed to fetch") || e?.message?.includes("NetworkError")
-        ? "Gateway tidak bisa dijangkau (CORS / DNS / offline)"
-        : (e?.message || "Gateway error"),
-    );
-  } finally {
-    clearTimeout(t);
-  }
-}
-
 /**
- * Build the full Rama public-API URL from the user-supplied base URL.
- * Accepts:  https://ramashop.my.id
- *           https://ramashop.my.id/
- *           https://ramashop.my.id/api/public
- *           https://ramashop.my.id/api/public/
- * Always returns:  https://ramashop.my.id/api/public/<path>
- */
-function buildGatewayUrl(base: string, path: string): string {
-  let b = base.trim().replace(/\/+$/, "");
-  if (!/\/api\/public$/i.test(b)) b = `${b}/api/public`;
-  const p = path.startsWith("/") ? path : `/${path}`;
-  return `${b}${p}`;
-}
-
-/**
- * Rama responses always wrap the payload in either { success, data, message }
- * or { status, data, message }. Unwrap and surface the message on errors.
- */
-function unwrapGateway<T>(json: any): T {
-  if (json && typeof json === "object") {
-    const ok = json.success === true || json.status === true;
-    if (!ok) {
-      const msg = json.message || json.error || "Gateway menolak permintaan";
-      throw new Error(`Gateway: ${msg}`);
-    }
-    if (json.data && typeof json.data === "object") return json.data as T;
-  }
-  // Some envelopes return the payload at the root.
-  return json as T;
-}
-
-/**
- * Create a deposit via the configured payment gateway. When the gateway is
- * disabled or no API key is set, a deterministic local simulation is returned
- * so the QRIS flow keeps working offline.
+ * Buat deposit QRIS MANUAL — tidak ada gateway pihak ketiga.
+ * Sistem cuma bikin ID deposit + kode unik (untuk membantu admin
+ * mencocokkan pembayaran), lalu menampilkan gambar QRIS statis yang
+ * di-upload admin di halaman Pengaturan.
  */
 export async function createDeposit(
   amount: number,
-  method: "qris" = "qris",
+  _method: "qris" = "qris",
 ): Promise<DepositCreateResponse> {
   const s = getPaymentSettings();
-  if (s.gatewayEnabled && s.gatewayApiKey && s.gatewayBaseUrl) {
-    const url = buildGatewayUrl(s.gatewayBaseUrl, "/deposit/create");
-    const res = await fetchWithTimeout(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "X-API-Key": s.gatewayApiKey,
-      },
-      body: JSON.stringify({ amount, method }),
-    });
-    let json: any = null;
-    try { json = await res.json(); } catch { /* non-JSON body */ }
-    if (!res.ok) {
-      const msg = json?.message || json?.error || `HTTP ${res.status}`;
-      throw new Error(`Gateway: ${msg}`);
-    }
-    const data = unwrapGateway<any>(json);
-    return {
-      depositId: String(data.depositId ?? data.id ?? ""),
-      uniqueCode: Number(data.uniqueCode ?? 0),
-      totalAmount: Number(data.totalAmount ?? data.amount ?? amount),
-      qrImage: String(data.qrImage ?? ""),
-      qrString: String(data.qrString ?? ""),
-      expiredAt: String(
-        data.expiredAt ?? new Date(Date.now() + 15 * 60_000).toISOString(),
-      ),
-    };
-  }
-  // Local simulation — used when no gateway is configured.
   const uniqueCode = Math.floor(100 + Math.random() * 900);
   const totalAmount = amount + uniqueCode;
   const depositId = `DEP${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -1436,43 +1344,11 @@ export async function createDeposit(
   };
 }
 
-/** Poll deposit status; falls back to "pending" when no gateway is configured. */
+/**
+ * Mode manual: status selalu "pending" sampai admin / pembeli klik tombol
+ * "Saya Sudah Membayar". Tidak ada polling otomatis ke gateway.
+ */
 export async function getDepositStatus(depositId: string): Promise<DepositStatusResponse> {
-  const s = getPaymentSettings();
-  if (s.gatewayEnabled && s.gatewayApiKey && s.gatewayBaseUrl) {
-    const url = buildGatewayUrl(
-      s.gatewayBaseUrl,
-      `/deposit/status/${encodeURIComponent(depositId)}`,
-    );
-    const res = await fetchWithTimeout(
-      url,
-      {
-        headers: {
-          Accept: "application/json",
-          "X-API-Key": s.gatewayApiKey,
-        },
-      },
-      6000, // shorter timeout for polling
-    );
-    let json: any = null;
-    try { json = await res.json(); } catch { /* non-JSON */ }
-    if (!res.ok) {
-      const msg = json?.message || json?.error || `HTTP ${res.status}`;
-      throw new Error(`Gateway: ${msg}`);
-    }
-    const data = unwrapGateway<any>(json);
-    const raw = String(data.status ?? "pending").toLowerCase();
-    const status: DepositStatusResponse["status"] =
-      raw === "success" || raw === "paid" ? "success" :
-      raw === "already" || raw === "duplicate" ? "already" :
-      "pending";
-    return {
-      status,
-      depositId,
-      amount: data.paidAmount ?? data.amount,
-      paidAt: data.paidAt,
-    };
-  }
   return { status: "pending", depositId };
 }
 
