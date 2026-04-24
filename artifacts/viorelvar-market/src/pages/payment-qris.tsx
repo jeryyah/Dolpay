@@ -34,11 +34,14 @@ export default function PaymentQRIS() {
   const [gatewayLoading, setGatewayLoading] = useState(false);
   const [gatewayError, setGatewayError] = useState<string | null>(null);
   const [autoVerifying, setAutoVerifying] = useState(false);
+  const [forceStatic, setForceStatic] = useState(false);
 
   const qrWrapperRef = useRef<HTMLDivElement | null>(null);
 
   const settings = getPaymentSettings();
-  const gatewayMode = !!(settings.gatewayEnabled && settings.gatewayApiKey && settings.gatewayBaseUrl);
+  const gatewayMode =
+    !forceStatic &&
+    !!(settings.gatewayEnabled && settings.gatewayApiKey && settings.gatewayBaseUrl);
 
   useEffect(() => {
     const o = getOrderById(id);
@@ -360,12 +363,25 @@ export default function PaymentQRIS() {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-destructive mb-0.5">Gateway error</p>
                   <p className="text-[11px] text-muted-foreground break-words">{gatewayError}</p>
-                  <button
-                    onClick={() => { setGatewayError(null); setDeposit(null); }}
-                    className="mt-2 text-[11px] font-bold text-primary hover:underline inline-flex items-center gap-1"
-                  >
-                    <RefreshCw className="w-3 h-3" /> Coba lagi
-                  </button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => { setGatewayError(null); setDeposit(null); }}
+                      className="text-[11px] font-bold text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Coba lagi
+                    </button>
+                    <button
+                      onClick={() => {
+                        setGatewayError(null);
+                        setDeposit(null);
+                        setForceStatic(true);
+                        setTimeLeft(QR_TIMEOUT_SECONDS);
+                      }}
+                      className="text-[11px] font-bold text-foreground hover:underline"
+                    >
+                      Pakai QR statis &rarr;
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

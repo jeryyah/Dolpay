@@ -1322,6 +1322,32 @@ export interface DepositStatusResponse {
   paidAt?: string;
 }
 
+// Bound every gateway request so a non-responsive host can't hang the UI.
+const GATEWAY_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = GATEWAY_TIMEOUT_MS,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error(`Gateway timeout (${timeoutMs / 1000}s) — host tidak merespons`);
+    }
+    throw new Error(
+      e?.message?.includes("Failed to fetch") || e?.message?.includes("NetworkError")
+        ? "Gateway tidak bisa dijangkau (CORS / DNS / offline)"
+        : (e?.message || "Gateway error"),
+    );
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /**
  * Create a deposit via the configured payment gateway. When the gateway is
  * disabled or no API key is set, a deterministic local simulation is returned
@@ -1333,15 +1359,18 @@ export async function createDeposit(
 ): Promise<DepositCreateResponse> {
   const s = getPaymentSettings();
   if (s.gatewayEnabled && s.gatewayApiKey && s.gatewayBaseUrl) {
-    const res = await fetch(`${s.gatewayBaseUrl.replace(/\/$/, "")}/deposit/create`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": s.gatewayApiKey,
-        Authorization: `Bearer ${s.gatewayApiKey}`,
+    const res = await fetchWithTimeout(
+      `${s.gatewayBaseUrl.replace(/\/$/, "")}/deposit/create`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": s.gatewayApiKey,
+          Authorization: `Bearer ${s.gatewayApiKey}`,
+        },
+        body: JSON.stringify({ amount, method }),
       },
-      body: JSON.stringify({ amount, method }),
-    });
+    );
     if (!res.ok) throw new Error(`Gateway ${res.status}`);
     return (await res.json()) as DepositCreateResponse;
   }
@@ -1364,12 +1393,15 @@ export async function createDeposit(
 export async function getDepositStatus(depositId: string): Promise<DepositStatusResponse> {
   const s = getPaymentSettings();
   if (s.gatewayEnabled && s.gatewayApiKey && s.gatewayBaseUrl) {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${s.gatewayBaseUrl.replace(/\/$/, "")}/api/public/deposit/status/${encodeURIComponent(depositId)}`,
-      { headers: {
+      {
+        headers: {
           "X-API-Key": s.gatewayApiKey,
           Authorization: `Bearer ${s.gatewayApiKey}`,
-        } },
+        },
+      },
+      5000, // shorter timeout for polling
     );
     if (!res.ok) throw new Error(`Gateway ${res.status}`);
     return (await res.json()) as DepositStatusResponse;
