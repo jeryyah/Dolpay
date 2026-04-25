@@ -5,6 +5,7 @@ import { getCategories, saveCategories, getPublishers, savePublishers } from "./
 const SEED_FLAG = "pinz_custom_products_seeded_v1";
 const REMOVE_FLAG = "pinz_default_categories_removed_v1";
 const SOLD_BUMP_FLAG = "pinz_sold_count_bump_v2";
+const VARIANT_BUMP_FLAG = "pinz_variants_bump_v1";
 
 /**
  * One-time updates to the dummy `soldCount` of specific products. Matched by
@@ -41,6 +42,7 @@ const SEED_PRODUCTS: Product[] = [
     variants: [
       { id: "1d",  label: "1 Hari",  price: 25000  },
       { id: "7d",  label: "7 Hari",  price: 75000  },
+      { id: "14d", label: "14 Hari", price: 130000 },
       { id: "30d", label: "30 Hari", price: 186000 },
     ],
   },
@@ -75,6 +77,23 @@ const SEED_PRODUCTS: Product[] = [
     ],
   },
   {
+    id: "custom-hg-no-root",
+    title: "HG NO ROOT",
+    publisher: "CLIENT",
+    category: "key-appmod",
+    price: 20000,
+    originalPrice: 160000,
+    imageUrl: "https://placehold.co/600x600/dc2626/ffffff?text=HG+NO%0AROOT",
+    isHot: true,
+    soldCount: 3130,
+    variants: [
+      { id: "1d",  label: "1 Hari",  price: 20000  },
+      { id: "7d",  label: "7 Hari",  price: 65000  },
+      { id: "14d", label: "14 Hari", price: 110000 },
+      { id: "30d", label: "30 Hari", price: 160000 },
+    ],
+  },
+  {
     id: "custom-prime-hook",
     title: "PRIME HOOK",
     publisher: "CHEAT",
@@ -85,10 +104,38 @@ const SEED_PRODUCTS: Product[] = [
     variants: [
       { id: "1d",  label: "1 Hari",  price: 15000  },
       { id: "7d",  label: "7 Hari",  price: 50000  },
+      { id: "14d", label: "14 Hari", price: 85000  },
       { id: "30d", label: "30 Hari", price: 120000 },
     ],
   },
 ];
+
+/**
+ * One-time updates to product `variants` for existing localStorage products,
+ * so returning users get the new 4-variant lineups (Dripclient, HG NO ROOT,
+ * PRIME HOOK). Matched by product `id` OR by `title` (case-insensitive) so
+ * admin-created products are also refreshed.
+ */
+const VARIANT_OVERRIDES_BY_TITLE: Record<string, Product["variants"]> = {
+  "dripclient no root": [
+    { id: "1d",  label: "1 Hari",  price: 25000  },
+    { id: "7d",  label: "7 Hari",  price: 75000  },
+    { id: "14d", label: "14 Hari", price: 130000 },
+    { id: "30d", label: "30 Hari", price: 186000 },
+  ],
+  "hg no root": [
+    { id: "1d",  label: "1 Hari",  price: 20000  },
+    { id: "7d",  label: "7 Hari",  price: 65000  },
+    { id: "14d", label: "14 Hari", price: 110000 },
+    { id: "30d", label: "30 Hari", price: 160000 },
+  ],
+  "prime hook": [
+    { id: "1d",  label: "1 Hari",  price: 15000  },
+    { id: "7d",  label: "7 Hari",  price: 50000  },
+    { id: "14d", label: "14 Hari", price: 85000  },
+    { id: "30d", label: "30 Hari", price: 120000 },
+  ],
+};
 
 /**
  * One-time seed of the admin's original 4 custom products: Dripclient no root,
@@ -180,6 +227,31 @@ export function seedCustomProductsIfMissing(): void {
         } catch {}
       }
       localStorage.setItem(SOLD_BUMP_FLAG, "1");
+    }
+
+    // One-time migration: refresh variant lineups for existing localStorage
+    // products so returning users see the new 4-variant options for
+    // Dripclient, HG NO ROOT, and PRIME HOOK.
+    if (!localStorage.getItem(VARIANT_BUMP_FLAG)) {
+      const raw3 = localStorage.getItem("pinz_extra_products");
+      if (raw3) {
+        try {
+          const list3: Product[] = JSON.parse(raw3);
+          let bumped = false;
+          for (const p of list3) {
+            const titleKey = p.title.trim().toLowerCase();
+            const newVariants = VARIANT_OVERRIDES_BY_TITLE[titleKey];
+            if (newVariants) {
+              p.variants = newVariants.map((v) => ({ ...v }));
+              bumped = true;
+            }
+          }
+          if (bumped) {
+            localStorage.setItem("pinz_extra_products", JSON.stringify(list3));
+          }
+        } catch {}
+      }
+      localStorage.setItem(VARIANT_BUMP_FLAG, "1");
     }
   } catch {
     // Storage unavailable / quota — fail silently, admin can re-add manually.

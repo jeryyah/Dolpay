@@ -311,23 +311,6 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex overflow-x-auto pb-4 mb-8 gap-3 scrollbar-hide">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    activeCategory === cat.id 
-                      ? "bg-primary text-primary-foreground" 
-                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border border-border"
-                  }`}
-                >
-                  {cat.icon}
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
             {filteredProducts.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                 {filteredProducts.map((product) => (
