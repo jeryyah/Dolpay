@@ -75,7 +75,6 @@ COPY --from=builder /app/artifacts/viorelvar-market/dist/public ./public
 
 # Persistent data directory (mount a Railway Volume here for chat/sync persistence)
 RUN mkdir -p /data
-VOLUME ["/data"]
 
 EXPOSE 8080
 
