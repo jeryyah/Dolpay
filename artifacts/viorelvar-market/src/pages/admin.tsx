@@ -24,6 +24,7 @@ import {
   type Coupon, type CategoryDef,
 } from "@/lib/storage";
 import { getRoleBadge as roleBadge } from "@/lib/extra-storage";
+import { compressImageFile as compressImageFileShared } from "@/lib/image-compress";
 import { PRODUCTS, type Product, type ProductCategory } from "@/data/products";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -1322,17 +1323,29 @@ function NewProductModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [imageUrl, setImageUrl] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploading, setUploading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onloadend = () => setImageUrl(r.result as string);
-    r.readAsDataURL(f);
+    setUploading(true);
+    try {
+      const compressed = await compressImageFileShared(f);
+      setImageUrl(compressed);
+    } catch {
+      const r = new FileReader();
+      r.onloadend = () => setImageUrl(r.result as string);
+      r.readAsDataURL(f);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
-  const canCreate = title.trim().length >= 2 && publisher.trim().length >= 1 && category.trim().length >= 1;
+  const canCreate = title.trim().length >= 2 && publisher.trim().length >= 1 && category.trim().length >= 1 && !uploading;
 
   const handleCreate = () => {
     if (!canCreate) return;
+    setCreateError(null);
     const id = makeSlug(title, "produk");
     const firstVariantId = makeSlug("default", "var");
     const finalPublisher = ensurePublisher(publisher);
@@ -1349,8 +1362,15 @@ function NewProductModal({ onClose, onCreated }: { onClose: () => void; onCreate
       ],
       soldCount: 0,
     };
-    const created = addExtraProduct(newP);
-    onCreated(created);
+    try {
+      const created = addExtraProduct(newP);
+      onCreated(created);
+    } catch (err: any) {
+      setCreateError(
+        "Gagal menyimpan: penyimpanan browser penuh. Hapus beberapa produk lama atau pakai foto lebih kecil, lalu coba lagi."
+      );
+      console.error("[admin] addExtraProduct failed", err);
+    }
   };
 
   return (
@@ -1414,6 +1434,17 @@ function NewProductModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>Produk dibuat dengan 1 varian default (Rp 10.000). Anda bisa menambah/ubah varian setelah produk dibuat.</span>
           </div>
+
+          {uploading && (
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-300">
+              Mengoptimalkan foto…
+            </div>
+          )}
+          {createError && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-xs text-red-300">
+              {createError}
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-background/50">
           <button onClick={onClose} className="px-4 py-2 text-xs font-bold rounded-lg border border-border hover:bg-muted">Batal</button>
@@ -1422,7 +1453,7 @@ function NewProductModal({ onClose, onCreated }: { onClose: () => void; onCreate
             disabled={!canCreate}
             className="px-4 py-2 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:brightness-110 disabled:opacity-40 inline-flex items-center gap-1.5"
           >
-            <Plus className="w-3.5 h-3.5" />Simpan Produk
+            <Plus className="w-3.5 h-3.5" />{uploading ? "Memproses..." : "Simpan Produk"}
           </button>
         </div>
       </div>
@@ -1509,58 +1540,77 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
     setConfirmDeleteVarId(null);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [editUploading, setEditUploading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onloadend = () => setImageUrl(r.result as string);
-    r.readAsDataURL(f);
+    setEditUploading(true);
+    try {
+      const compressed = await compressImageFileShared(f);
+      setImageUrl(compressed);
+    } catch {
+      const r = new FileReader();
+      r.onloadend = () => setImageUrl(r.result as string);
+      r.readAsDataURL(f);
+    } finally {
+      setEditUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   const handleSave = () => {
+    setSaveError(null);
     const finalPublisher = ensurePublisher(publisher);
     const finalCategory = ensureCategory(category);
-    if (isCustom) {
-      const list = getExtraProducts();
-      const idx = list.findIndex((p) => p.id === product.id);
-      if (idx >= 0) {
-        const merged = [
-          ...product.variants.filter((v) => !removedBaseIds.has(v.id)),
-          ...extraVariants,
-        ].map((v) => ({
-          ...v,
+    try {
+      if (isCustom) {
+        const list = getExtraProducts();
+        const idx = list.findIndex((p) => p.id === product.id);
+        if (idx >= 0) {
+          const merged = [
+            ...product.variants.filter((v) => !removedBaseIds.has(v.id)),
+            ...extraVariants,
+          ].map((v) => ({
+            ...v,
+            label: variantLabels[v.id] || v.label,
+            price: variantPrices[v.id] ?? v.price,
+          }));
+          list[idx] = {
+            ...list[idx],
+            title,
+            imageUrl,
+            publisher: finalPublisher,
+            category: finalCategory,
+            variants: merged,
+            price: merged[0]?.price ?? list[idx].price,
+          };
+          saveExtraProducts(list);
+        }
+      } else {
+        const finalExtras = extraVariants.map((v) => ({
+          id: v.id,
           label: variantLabels[v.id] || v.label,
           price: variantPrices[v.id] ?? v.price,
         }));
-        list[idx] = {
-          ...list[idx],
+        setProductOverride(product.id, {
           title,
           imageUrl,
           publisher: finalPublisher,
           category: finalCategory,
-          variants: merged,
-          price: merged[0]?.price ?? list[idx].price,
-        };
-        saveExtraProducts(list);
+          variantPrices,
+          variantLabels,
+          extraVariants: finalExtras,
+          removedVariantIds: Array.from(removedBaseIds),
+        });
       }
-    } else {
-      const finalExtras = extraVariants.map((v) => ({
-        id: v.id,
-        label: variantLabels[v.id] || v.label,
-        price: variantPrices[v.id] ?? v.price,
-      }));
-      setProductOverride(product.id, {
-        title,
-        imageUrl,
-        publisher: finalPublisher,
-        category: finalCategory,
-        variantPrices,
-        variantLabels,
-        extraVariants: finalExtras,
-        removedVariantIds: Array.from(removedBaseIds),
-      });
+      Object.entries(stocksByVariant).forEach(([vid, keys]) => setStockKeys(product.id, vid, keys));
+      onSaved();
+    } catch (err: any) {
+      setSaveError(
+        "Gagal menyimpan: penyimpanan browser penuh. Hapus beberapa produk lama atau pakai foto lebih kecil, lalu coba lagi."
+      );
+      console.error("[admin] save product failed", err);
     }
-    Object.entries(stocksByVariant).forEach(([vid, keys]) => setStockKeys(product.id, vid, keys));
-    onSaved();
   };
 
   return (
@@ -1706,10 +1756,29 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
           </div>
         </div>
 
+        {(editUploading || saveError) && (
+          <div className="px-5 pb-2 space-y-2">
+            {editUploading && (
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-300">
+                Mengoptimalkan foto…
+              </div>
+            )}
+            {saveError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-xs text-red-300">
+                {saveError}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-background/50">
           <button onClick={onClose} className="px-4 py-2 text-xs font-bold rounded-lg border border-border hover:bg-muted">Batal</button>
-          <button onClick={handleSave} className="px-4 py-2 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:brightness-110 inline-flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5" />Simpan Perubahan
+          <button
+            onClick={handleSave}
+            disabled={editUploading}
+            className="px-4 py-2 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:brightness-110 disabled:opacity-40 inline-flex items-center gap-1.5"
+          >
+            <CheckCircle className="w-3.5 h-3.5" />{editUploading ? "Memproses..." : "Simpan Perubahan"}
           </button>
         </div>
 

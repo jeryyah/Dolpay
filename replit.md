@@ -52,4 +52,21 @@ When you cut a new release of the project source bundle:
 
 The local `artifacts/viorelvar-market/public/viorelvar-project.tar.gz` is gitignored so it never gets committed back to the repo.
 
+## Recent Fixes
+
+### Foto produk + varian gagal tersimpan (Apr 2026)
+
+Bug: Saat admin menambah/mengedit produk dengan foto besar (kamera HP, biasanya 3–8MB),
+upload base64-nya melewati kuota localStorage (~5MB), jadi `saveExtraProducts`
+melempar `QuotaExceededError` tanpa pesan ke user.
+
+Fix:
+- Helper `compressImageFile` dipindah ke `src/lib/image-compress.ts` agar bisa dipakai bersama.
+- `NewProductModal` & `EditProductModal` di `pages/admin.tsx` sekarang mengompres foto
+  (max 720px, JPEG q=0.82) sebelum disimpan, sehingga blob akhir <120KB.
+- `saveExtraProducts` & `saveProductOverrides` di `lib/storage.ts` pakai `safeSetItem` —
+  drop cache prioritas rendah saat penuh, lalu lempar error yang ditangkap UI.
+- Modal kini menampilkan banner merah "penyimpanan browser penuh" jika save gagal,
+  dan tombol simpan di-disable selama foto sedang dikompres.
+
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

@@ -344,7 +344,8 @@ export function getProductOverrides(): ProductOverrideMap {
   } catch { return {}; }
 }
 export function saveProductOverrides(map: ProductOverrideMap) {
-  localStorage.setItem("pinz_product_overrides", JSON.stringify(map));
+  const ok = safeSetItem("pinz_product_overrides", JSON.stringify(map));
+  if (!ok) throw new Error("QUOTA_EXCEEDED: pinz_product_overrides");
   broadcastStorageChange("pinz_product_overrides");
 }
 export function setProductOverride(productId: string, override: ProductOverride) {
@@ -376,7 +377,8 @@ export function getExtraProducts(): Product[] {
   catch { return []; }
 }
 export function saveExtraProducts(list: Product[]) {
-  localStorage.setItem("pinz_extra_products", JSON.stringify(list));
+  const ok = safeSetItem("pinz_extra_products", JSON.stringify(list));
+  if (!ok) throw new Error("QUOTA_EXCEEDED: pinz_extra_products");
   broadcastStorageChange("pinz_extra_products");
 }
 export function addExtraProduct(p: Omit<Product, "soldCount"> & { soldCount?: number }): Product {
@@ -744,15 +746,20 @@ function safeSetItem(key: string, value: string): boolean {
   try { localStorage.setItem(key, value); return true; }
   catch (err: any) {
     // QuotaExceeded — try to free room by dropping low-priority caches first.
-    try {
-      const drop = ["pinz_dummy_seeded_v1", "pinz_dummy_seeded_v2"];
-      drop.forEach((k) => localStorage.removeItem(k));
-      localStorage.setItem(key, value);
-      return true;
-    } catch {
-      console.error(`[storage] Gagal menyimpan ${key}: kuota penyimpanan browser penuh.`, err);
-      return false;
+    const dropTiers: string[][] = [
+      ["pinz_dummy_seeded_v1", "pinz_dummy_seeded_v2"],
+      ["pinz_purchase_notifs", "pinz_chat_messages", "pinz_chat_unread"],
+      ["pinz_dummy_orders", "pinz_dummy_users"],
+    ];
+    for (const tier of dropTiers) {
+      try {
+        tier.forEach((k) => localStorage.removeItem(k));
+        localStorage.setItem(key, value);
+        return true;
+      } catch { /* try next tier */ }
     }
+    console.error(`[storage] Gagal menyimpan ${key}: kuota penyimpanan browser penuh.`, err);
+    return false;
   }
 }
 
