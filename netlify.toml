@@ -12,7 +12,8 @@
   included_files = ["node_modules/@netlify/**"]
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "24"
+  PNPM_VERSION = "10.26.1"
   NPM_FLAGS = "--version"
   PNPM_FLAGS = "--shamefully-hoist"
   # Skip bundling viorelvar-project.tar.gz into the publish dir; it's served
