@@ -3,7 +3,7 @@ import {
   Wrench, CalendarClock, Plus, Trash2, Database, FileDown, Upload,
   Activity, ShieldAlert, Gift, Tag as TagIcon, UserCog, Eye, KeyRound,
   Send, MessageSquare, Lock, RefreshCw, BarChart3, Package, AlertTriangle,
-  CheckCircle, XCircle, Copy, Save,
+  CheckCircle, XCircle, Copy, Save, HardDrive, Eraser, Zap,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -11,6 +11,8 @@ import {
 } from "recharts";
 import {
   type User, type Order, type UserRole, getUsers, getOrders, getStockKeys,
+  getStorageUsage, clearSafeCaches, resetAllStorageExceptSession,
+  type StorageUsage,
 } from "@/lib/storage";
 import { formatCurrency } from "@/lib/utils";
 import { getAllProducts } from "@/lib/storage";
@@ -37,6 +39,170 @@ import { useLocation } from "wouter";
 // ════════════════════════════════════════════════════════════════════════
 // 1. MAINTENANCE + SCHEDULED ANNOUNCEMENTS
 // ════════════════════════════════════════════════════════════════════════
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function StoragePanel() {
+  const QUOTA_ESTIMATE = 5 * 1024 * 1024; // ~5 MB tipikal localStorage browser
+  const [usage, setUsage] = useState<StorageUsage>(() => getStorageUsage());
+  const [flash, setFlash] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [showFullReset, setShowFullReset] = useState(false);
+
+  const refresh = () => setUsage(getStorageUsage());
+
+  const flashMsg = (kind: "ok" | "err", text: string) => {
+    setFlash({ kind, text });
+    setTimeout(() => setFlash(null), 5000);
+  };
+
+  const handleClearSafe = () => {
+    const r = clearSafeCaches();
+    refresh();
+    flashMsg("ok", `Berhasil membersihkan ${r.keysRemoved} cache (~${fmtBytes(r.bytesFreed)} dibebaskan).`);
+  };
+
+  const handleFullReset = () => {
+    if (confirmText !== "RESET") {
+      flashMsg("err", "Ketik RESET (huruf kapital semua) untuk konfirmasi.");
+      return;
+    }
+    const r = resetAllStorageExceptSession();
+    flashMsg("ok", `Berhasil hapus ${r.keysRemoved} item (~${fmtBytes(r.bytesFreed)}). Halaman akan dimuat ulang...`);
+    setTimeout(() => window.location.reload(), 800);
+  };
+
+  const pct = Math.min(100, (usage.pinzBytes / QUOTA_ESTIMATE) * 100);
+  const barColor = pct > 80 ? "bg-rose-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500";
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+        <HardDrive className="w-4 h-4 text-primary" />
+        <p className="font-bold text-sm">Penyimpanan Browser</p>
+        <button onClick={refresh} className="ml-auto text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* Usage bar */}
+        <div>
+          <div className="flex items-end justify-between mb-1.5">
+            <p className="text-xs text-muted-foreground">Pemakaian aplikasi</p>
+            <p className="text-sm font-bold">
+              {fmtBytes(usage.pinzBytes)} <span className="text-xs text-muted-foreground font-normal">/ ~{fmtBytes(QUOTA_ESTIMATE)} ({pct.toFixed(1)}%)</span>
+            </p>
+          </div>
+          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+            <div className={`h-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1.5">
+            {usage.pinzKeys} item aplikasi · {fmtBytes(usage.safeCacheBytes)} berupa cache yang aman dibersihkan
+          </p>
+        </div>
+
+        {/* Top consumers */}
+        {usage.topKeys.length > 0 && (
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground uppercase mb-1.5">Item Terbesar</p>
+            <div className="space-y-1">
+              {usage.topKeys.map((k) => (
+                <div key={k.key} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-muted/30">
+                  <span className="font-mono truncate">{k.key}</span>
+                  <span className="text-muted-foreground shrink-0 ml-2">{fmtBytes(k.bytes)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Flash message */}
+        {flash && (
+          <div className={`px-3 py-2 rounded-lg text-xs flex items-start gap-2 ${flash.kind === "ok" ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/10 text-rose-300 border border-rose-500/30"}`}>
+            {flash.kind === "ok" ? <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+            <span>{flash.text}</span>
+          </div>
+        )}
+
+        {/* Action 1: Safe clear */}
+        <div className="rounded-xl border border-border bg-background/40 p-3">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+              <Eraser className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold">Bersihkan Cache (Aman)</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Hapus log aktivitas, notifikasi pembelian, pesan chat, dan data dummy. Produk, pesanan, user, dan pengaturan TIDAK terhapus.
+              </p>
+              <button
+                onClick={handleClearSafe}
+                disabled={usage.safeCacheBytes === 0}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 text-black text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                Bersihkan ({fmtBytes(usage.safeCacheBytes)})
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Action 2: Full reset */}
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-rose-300">Reset Total Penyimpanan</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Hapus SEMUA data aplikasi di browser ini (produk custom, pesanan, user, kupon, pengaturan pembayaran, dll). Login admin tetap aktif. Tidak bisa dibatalkan.
+              </p>
+              {!showFullReset ? (
+                <button
+                  onClick={() => setShowFullReset(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 text-xs font-bold"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Reset Total...
+                </button>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[11px] text-rose-300 font-semibold">Ketik RESET untuk konfirmasi:</p>
+                  <input
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder="RESET"
+                    className="w-full px-3 py-2 bg-background border border-rose-500/40 rounded-lg text-sm font-mono focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleFullReset}
+                      disabled={confirmText !== "RESET"}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-500 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Konfirmasi Reset Total
+                    </button>
+                    <button
+                      onClick={() => { setShowFullReset(false); setConfirmText(""); }}
+                      className="px-3 py-2 rounded-lg border border-border text-xs font-bold hover:bg-muted/40"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MaintenanceTab() {
   const [cfg, setCfg] = useState(() => getMaintenance());
   const [list, setList] = useState<ScheduledAnnouncement[]>(() => getScheduledAnnouncements());
@@ -63,6 +229,9 @@ export function MaintenanceTab() {
 
   return (
     <div className="space-y-5">
+      {/* Storage maintenance — paling atas supaya mudah ditemukan saat error "penyimpanan penuh" */}
+      <StoragePanel />
+
       {/* Maintenance toggle */}
       <div className={`rounded-2xl border p-5 ${cfg.enabled ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-card"}`}>
         <div className="flex items-start gap-4">

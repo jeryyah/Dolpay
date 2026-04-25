@@ -1396,6 +1396,115 @@ export async function getDepositStatus(depositId: string): Promise<DepositStatus
   return { status: "pending", depositId };
 }
 
+// ─── Storage Maintenance Helpers ───────────────────────────────────────────
+/**
+ * Keys yang aman dihapus tanpa kehilangan data penting (cache, dummy, log,
+ * notif transient). Menjalankan clearSafeCaches() biasanya cukup untuk
+ * mengatasi quota penuh di browser.
+ */
+const SAFE_CACHE_KEYS = [
+  "pinz_dummy_seeded_v1",
+  "pinz_dummy_seeded_v2",
+  "pinz_dummy_orders",
+  "pinz_dummy_users",
+  "pinz_purchase_notifs",
+  "pinz_chat",
+  "pinz_chat_messages",
+  "pinz_chat_unread",
+  "pinz_chat_new",
+  "pinz_activity_log",
+  "pinz_broadcast",
+  "pinz_broadcast_seen",
+  "pinz_inapp_notif",
+  "pinz_inapp_notifs",
+  "pinz_new_purchase",
+  "pinz_dismissed_sched",
+  "pinz_impersonate_origin",
+  "pinz_admin_open_tab",
+  "pinz_stok",
+];
+
+/**
+ * Keys yang HARUS dipertahankan saat reset total. Menjaga login admin tetap
+ * aktif sehingga tidak terkunci dari panel.
+ */
+const PROTECTED_KEYS_ON_FULL_RESET = [
+  "pinz_session",
+  "pinz_device_id",
+  "pinz_app_version",
+];
+
+export interface StorageUsage {
+  totalBytes: number;
+  totalKeys: number;
+  pinzBytes: number;
+  pinzKeys: number;
+  safeCacheBytes: number;
+  topKeys: Array<{ key: string; bytes: number }>;
+}
+
+export function getStorageUsage(): StorageUsage {
+  let totalBytes = 0;
+  let totalKeys = 0;
+  let pinzBytes = 0;
+  let pinzKeys = 0;
+  let safeCacheBytes = 0;
+  const sizes: Array<{ key: string; bytes: number }> = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    const v = localStorage.getItem(k) || "";
+    // UTF-16: 2 bytes per char (perkiraan kasar quota browser).
+    const bytes = (k.length + v.length) * 2;
+    totalBytes += bytes;
+    totalKeys += 1;
+    if (k.startsWith("pinz_")) {
+      pinzBytes += bytes;
+      pinzKeys += 1;
+      sizes.push({ key: k, bytes });
+      if (SAFE_CACHE_KEYS.includes(k)) safeCacheBytes += bytes;
+    }
+  }
+  sizes.sort((a, b) => b.bytes - a.bytes);
+  return {
+    totalBytes,
+    totalKeys,
+    pinzBytes,
+    pinzKeys,
+    safeCacheBytes,
+    topKeys: sizes.slice(0, 8),
+  };
+}
+
+export function clearSafeCaches(): { keysRemoved: number; bytesFreed: number } {
+  let keysRemoved = 0;
+  let bytesFreed = 0;
+  for (const k of SAFE_CACHE_KEYS) {
+    const v = localStorage.getItem(k);
+    if (v !== null) {
+      bytesFreed += (k.length + v.length) * 2;
+      localStorage.removeItem(k);
+      keysRemoved += 1;
+    }
+  }
+  return { keysRemoved, bytesFreed };
+}
+
+export function resetAllStorageExceptSession(): { keysRemoved: number; bytesFreed: number } {
+  const toRemove: string[] = [];
+  let bytesFreed = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    if (PROTECTED_KEYS_ON_FULL_RESET.includes(k)) continue;
+    const v = localStorage.getItem(k) || "";
+    bytesFreed += (k.length + v.length) * 2;
+    toRemove.push(k);
+  }
+  toRemove.forEach((k) => localStorage.removeItem(k));
+  return { keysRemoved: toRemove.length, bytesFreed };
+}
+
 export function backupKeyToEmail(orderId: string, email: string): { ok: boolean; error?: string } {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return { ok: false, error: "Email tidak valid." };
