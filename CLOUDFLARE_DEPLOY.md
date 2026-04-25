@@ -1,30 +1,36 @@
 # Deploy Viorelvar Market ke Cloudflare Pages
 
-Panduan singkat untuk men-deploy proyek ini ke Cloudflare Pages dari repo
-GitHub `jeryyah/Dolpay`.
+Panduan setup Cloudflare Pages dari repo GitHub `jeryyah/Dolpay`, lengkap
+dengan Cloudflare KV untuk fitur Live Chat dan Cross-Device Sync.
 
-## 1. Login & buat project
+## 1. Buat KV namespace dulu
+
+Live Chat (`/api/chat`) dan sync data antar perangkat (`/api/sync`) butuh
+penyimpanan. Di Cloudflare pakai KV.
 
 1. Login ke <https://dash.cloudflare.com/>.
-2. Pilih **Workers & Pages** → **Create application** → tab **Pages** →
-   **Connect to Git**.
-3. Pilih GitHub, authorize Cloudflare, pilih repo **`jeryyah/Dolpay`** →
-   **Begin setup**.
+2. Sidebar → **Workers & Pages** → **KV**.
+3. Klik **Create a namespace**.
+4. Beri nama bebas, contoh: `viorelvar-store`.
+5. Salin **Namespace ID** (akan dipakai saat binding di langkah 3).
 
-## 2. Build settings
+## 2. Buat project Pages
+
+1. Sidebar → **Workers & Pages** → **Create application** → tab **Pages** →
+   **Connect to Git**.
+2. Authorize GitHub, pilih repo **`jeryyah/Dolpay`** → **Begin setup**.
+3. Isi build settings:
 
 | Field | Value |
 | --- | --- |
-| Project name | `viorelvar-market` (atau apa saja) |
+| Project name | `viorelvar-market` (bebas) |
 | Production branch | `main` |
 | Framework preset | **None** |
 | Build command | `pnpm install --no-frozen-lockfile && BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/viorelvar-market run build` |
 | Build output directory | `artifacts/viorelvar-market/dist/public` |
-| Root directory | *(kosongkan, biarkan default)* |
+| Root directory | *(kosongkan)* |
 
-## 3. Environment variables
-
-Klik **Add variable** dan tambahkan:
+4. **Environment variables** (klik **Add variable**):
 
 | Name | Value |
 | --- | --- |
@@ -32,22 +38,46 @@ Klik **Add variable** dan tambahkan:
 | `PNPM_VERSION` | `10.26.1` |
 | `VITE_DOWNLOAD_URL` | `https://github.com/jeryyah/Dolpay/releases/download/v1.0.0/viorelvar-project.tar.gz` |
 
-## 4. Deploy
+5. Klik **Save and Deploy**. Tunggu build pertama (~2–4 menit).
 
-Klik **Save and Deploy**. Build pertama sekitar 2–4 menit.
-Setelah selesai, situsmu hidup di `https://<project-name>.pages.dev`.
+## 3. Bind KV namespace ke Pages
 
-Tiap kali kamu push ke branch `main` di GitHub, Cloudflare akan otomatis
-re-build & re-deploy.
+Tanpa binding ini, `/api/chat` dan `/api/sync` akan error 500.
 
-## Catatan
+1. Buka project Pages yang baru dibuat → tab **Settings** → **Functions**
+   (atau **Bindings** di UI baru).
+2. Scroll ke **KV namespace bindings** → **Add binding**.
+3. Isi:
+   - **Variable name:** `STORE` (harus persis ini, sudah dipakai di code)
+   - **KV namespace:** pilih `viorelvar-store` yang dibuat di langkah 1.
+4. Save. Cloudflare akan me-redeploy otomatis dalam ~30 detik.
 
-- File `_redirects` dan `_headers` sudah disiapkan di
-  `artifacts/viorelvar-market/public/`, jadi SPA routing dan caching aset
-  langsung jalan.
-- Fitur live chat & cross-device sync (`/api/chat`, `/api/sync`) saat ini
-  pakai Netlify Functions. Di Cloudflare, endpoint itu belum tersedia,
-  jadi fitur tersebut perlu di-port ke Cloudflare Pages Functions kalau
-  mau dipakai. Storefront, admin panel, dan katalog produk tetap jalan
-  normal tanpa itu.
-- Custom domain bisa ditambahkan dari tab **Custom domains** project Pages.
+## 4. Selesai
+
+Situs hidup di `https://<project-name>.pages.dev`. Tiap push ke `main` di
+GitHub akan auto-rebuild & redeploy.
+
+Verifikasi:
+
+- `https://<domain>/admin` — buka admin panel, pastikan kategori cuma
+  `APKMOD` & `ROOT`.
+- `https://<domain>/api/sync` — harusnya return JSON `{}` (kosong, tapi
+  bukan 500). Kalau error, cek binding KV.
+- Buka 2 tab/perangkat → tambah produk di admin → pastikan muncul juga di
+  perangkat lain dalam 1–2 detik.
+
+## Custom domain
+
+Tab **Custom domains** di project Pages → tambahkan domain milikmu →
+ikuti instruksi DNS-nya.
+
+## File-file yang sudah disiapkan di repo
+
+- `functions/api/chat.ts` — Cloudflare Pages Function untuk live chat.
+- `functions/api/sync.ts` — Cloudflare Pages Function untuk sync data.
+- `artifacts/viorelvar-market/public/_redirects` — SPA fallback routing.
+- `artifacts/viorelvar-market/public/_headers` — cache header untuk aset.
+
+> Catatan: file `netlify/functions/*` dan `netlify.toml` masih di repo —
+> dipertahankan biar Netlify tetap bisa kamu pakai sebagai backup. Tidak
+> dipakai oleh Cloudflare.
