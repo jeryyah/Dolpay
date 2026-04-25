@@ -1319,7 +1319,7 @@ function NewProductModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const pubs = getPublishers();
   const [title, setTitle] = useState("");
   const [publisher, setPublisher] = useState(pubs[0] || "");
-  const [category, setCategory] = useState<ProductCategory>(cats[0]?.id || "game-topup");
+  const [category, setCategory] = useState<ProductCategory>(cats[0]?.id || "apkmod");
   const [imageUrl, setImageUrl] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 

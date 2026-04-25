@@ -6,6 +6,8 @@ export const REMOVED_CATEGORY_IDS: string[] = [
   "voucher",
   "app-premium",
   "joki",
+  "key-appmod",
+  "app-virtual",
 ];
 
 export interface ProductVariant {

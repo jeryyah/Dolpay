@@ -2,8 +2,9 @@ import type { Product } from "@/data/products";
 import { REMOVED_CATEGORY_IDS } from "@/data/products";
 import { getCategories, saveCategories, getPublishers, savePublishers } from "./storage";
 
-const SEED_FLAG = "pinz_custom_products_seeded_v1";
-const REMOVE_FLAG = "pinz_default_categories_removed_v1";
+const SEED_FLAG = "pinz_custom_products_seeded_v2";
+const REMOVE_FLAG = "pinz_default_categories_removed_v2";
+const CATEGORY_MIGRATE_FLAG = "pinz_categories_apkmod_root_v1";
 const SOLD_BUMP_FLAG = "pinz_sold_count_bump_v2";
 const VARIANT_BUMP_FLAG = "pinz_variants_bump_v1";
 
@@ -22,8 +23,8 @@ const SOLD_COUNT_OVERRIDES_BY_TITLE: Record<string, number> = {
 };
 
 const SEED_CATEGORIES: { id: string; label: string }[] = [
-  { id: "key-appmod",  label: "KEY APPMOD" },
-  { id: "app-virtual", label: "APP VIRTUAL" },
+  { id: "apkmod", label: "APKMOD" },
+  { id: "root",   label: "ROOT" },
 ];
 
 const SEED_PUBLISHERS: string[] = ["CLIENT", "TEAM", "ROOT/NOROT", "CHEAT"];
@@ -33,7 +34,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "custom-dripclient-no-root",
     title: "Dripclient no root",
     publisher: "CLIENT",
-    category: "key-appmod",
+    category: "apkmod",
     price: 25000,
     originalPrice: 186000,
     imageUrl: "https://placehold.co/600x600/7c3aed/ffffff?text=DRIPCLIENT%0Ano+root",
@@ -50,7 +51,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "custom-pato-team",
     title: "PATO TEAM",
     publisher: "TEAM",
-    category: "key-appmod",
+    category: "apkmod",
     price: 50000,
     originalPrice: 54990,
     imageUrl: "https://placehold.co/600x600/16a34a/ffffff?text=PATO+TEAM",
@@ -67,7 +68,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "custom-virtual-vphone",
     title: "VIRTUAL VPHONE",
     publisher: "ROOT/NOROT",
-    category: "app-virtual",
+    category: "root",
     price: 25000,
     imageUrl: "https://placehold.co/600x600/0891b2/ffffff?text=VIRTUAL%0AVPHONE",
     soldCount: 3200,
@@ -80,7 +81,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "custom-hg-no-root",
     title: "HG NO ROOT",
     publisher: "CLIENT",
-    category: "key-appmod",
+    category: "apkmod",
     price: 20000,
     originalPrice: 160000,
     imageUrl: "https://placehold.co/600x600/dc2626/ffffff?text=HG+NO%0AROOT",
@@ -97,7 +98,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "custom-prime-hook",
     title: "PRIME HOOK",
     publisher: "CHEAT",
-    category: "key-appmod",
+    category: "apkmod",
     price: 15000,
     imageUrl: "https://placehold.co/600x600/65a30d/ffffff?text=PRIME+HOOK",
     soldCount: 1200,
@@ -201,6 +202,55 @@ export function seedCustomProductsIfMissing(): void {
       localStorage.setItem("pinz_extra_products", JSON.stringify(list));
     }
     localStorage.setItem(SEED_FLAG, "1");
+
+    // One-time migration: remap any existing extra products whose category id
+    // points at the old taxonomy (key-appmod / app-virtual / game-topup / ...)
+    // onto the new APKMOD / ROOT pair, and clean up matching overrides too.
+    if (!localStorage.getItem(CATEGORY_MIGRATE_FLAG)) {
+      const remap: Record<string, string> = {
+        "key-appmod": "apkmod",
+        "app-virtual": "root",
+        "game-topup": "apkmod",
+        "voucher": "apkmod",
+        "app-premium": "apkmod",
+        "joki": "apkmod",
+      };
+      try {
+        const rawX = localStorage.getItem("pinz_extra_products");
+        if (rawX) {
+          const listX: Product[] = JSON.parse(rawX);
+          let changed = false;
+          for (const p of listX) {
+            const next = remap[p.category];
+            if (next) {
+              p.category = next;
+              changed = true;
+            }
+          }
+          if (changed) {
+            localStorage.setItem("pinz_extra_products", JSON.stringify(listX));
+          }
+        }
+      } catch {}
+      try {
+        const rawO = localStorage.getItem("pinz_product_overrides");
+        if (rawO) {
+          const overrides = JSON.parse(rawO) as Record<string, { category?: string }>;
+          let changed = false;
+          for (const k of Object.keys(overrides)) {
+            const ov = overrides[k];
+            if (ov && typeof ov.category === "string" && remap[ov.category]) {
+              ov.category = remap[ov.category];
+              changed = true;
+            }
+          }
+          if (changed) {
+            localStorage.setItem("pinz_product_overrides", JSON.stringify(overrides));
+          }
+        }
+      } catch {}
+      localStorage.setItem(CATEGORY_MIGRATE_FLAG, "1");
+    }
 
     // One-time migration: refresh dummy soldCount values for existing
     // localStorage entries so returning users see the new totals. Matches
