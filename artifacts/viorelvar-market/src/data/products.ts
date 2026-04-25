@@ -1,9 +1,11 @@
 export type ProductCategory = string;
-export const DEFAULT_CATEGORIES: { id: string; label: string }[] = [
-  { id: "game-topup",  label: "Game Top-up" },
-  { id: "voucher",     label: "Voucher" },
-  { id: "app-premium", label: "App Premium" },
-  { id: "joki",        label: "Joki" },
+export const DEFAULT_CATEGORIES: { id: string; label: string }[] = [];
+
+export const REMOVED_CATEGORY_IDS: string[] = [
+  "game-topup",
+  "voucher",
+  "app-premium",
+  "joki",
 ];
 
 export interface ProductVariant {

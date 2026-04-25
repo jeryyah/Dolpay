@@ -1,7 +1,9 @@
 import type { Product } from "@/data/products";
+import { REMOVED_CATEGORY_IDS } from "@/data/products";
 import { getCategories, saveCategories, getPublishers, savePublishers } from "./storage";
 
 const SEED_FLAG = "pinz_custom_products_seeded_v1";
+const REMOVE_FLAG = "pinz_default_categories_removed_v1";
 
 const SEED_CATEGORIES: { id: string; label: string }[] = [
   { id: "key-appmod",  label: "KEY APPMOD" },
@@ -85,7 +87,21 @@ export function seedCustomProductsIfMissing(): void {
   try {
     // Make sure the categories and publishers used by the seed exist so the
     // products are not orphaned in the admin filters.
-    const cats = getCategories();
+    let cats = getCategories();
+
+    // One-time cleanup: strip the legacy default categories
+    // (Game Top-up, Voucher, App Premium, Joki) from existing localStorage
+    // caches so returning users no longer see them in the filter bar.
+    if (!localStorage.getItem(REMOVE_FLAG)) {
+      const removeSet = new Set(REMOVED_CATEGORY_IDS);
+      const filtered = cats.filter((c) => !removeSet.has(c.id));
+      if (filtered.length !== cats.length) {
+        saveCategories(filtered);
+        cats = filtered;
+      }
+      localStorage.setItem(REMOVE_FLAG, "1");
+    }
+
     const catIds = new Set(cats.map((c) => c.id));
     let catsChanged = false;
     for (const c of SEED_CATEGORIES) {
