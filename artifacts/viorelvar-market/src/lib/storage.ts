@@ -291,7 +291,8 @@ export function getStockMap(): StockMap {
 }
 
 export function saveStockMap(map: StockMap) {
-  localStorage.setItem("pinz_stock", JSON.stringify(map));
+  const ok = safeSetItem("pinz_stock", JSON.stringify(map));
+  if (!ok) throw new Error("QUOTA_EXCEEDED: pinz_stock");
   broadcastStorageChange("pinz_stock");
 }
 
@@ -474,7 +475,8 @@ export function getCategories(): CategoryDef[] {
 }
 
 export function saveCategories(list: CategoryDef[]) {
-  localStorage.setItem("pinz_categories", JSON.stringify(list));
+  const ok = safeSetItem("pinz_categories", JSON.stringify(list));
+  if (!ok) throw new Error("QUOTA_EXCEEDED: pinz_categories");
   broadcastStorageChange("pinz_categories");
 }
 
@@ -536,7 +538,8 @@ export function getPublishers(): string[] {
 }
 
 export function savePublishers(list: string[]) {
-  localStorage.setItem("pinz_publishers", JSON.stringify(list));
+  const ok = safeSetItem("pinz_publishers", JSON.stringify(list));
+  if (!ok) throw new Error("QUOTA_EXCEEDED: pinz_publishers");
   broadcastStorageChange("pinz_publishers");
 }
 

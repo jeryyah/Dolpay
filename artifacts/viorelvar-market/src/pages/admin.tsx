@@ -1346,23 +1346,23 @@ function NewProductModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const handleCreate = () => {
     if (!canCreate) return;
     setCreateError(null);
-    const id = makeSlug(title, "produk");
-    const firstVariantId = makeSlug("default", "var");
-    const finalPublisher = ensurePublisher(publisher);
-    const finalCategory = ensureCategory(category);
-    const newP: Product = {
-      id,
-      title: title.trim(),
-      publisher: finalPublisher,
-      category: finalCategory,
-      imageUrl: imageUrl || `https://via.placeholder.com/256x256/1a1a2e/aaff00?text=${encodeURIComponent(title.slice(0, 4).toUpperCase())}`,
-      price: 10000,
-      variants: [
-        { id: firstVariantId, label: "Default", price: 10000 },
-      ],
-      soldCount: 0,
-    };
     try {
+      const id = makeSlug(title, "produk");
+      const firstVariantId = makeSlug("default", "var");
+      const finalPublisher = ensurePublisher(publisher);
+      const finalCategory = ensureCategory(category);
+      const newP: Product = {
+        id,
+        title: title.trim(),
+        publisher: finalPublisher,
+        category: finalCategory,
+        imageUrl: imageUrl || `https://via.placeholder.com/256x256/1a1a2e/aaff00?text=${encodeURIComponent(title.slice(0, 4).toUpperCase())}`,
+        price: 10000,
+        variants: [
+          { id: firstVariantId, label: "Default", price: 10000 },
+        ],
+        soldCount: 0,
+      };
       const created = addExtraProduct(newP);
       onCreated(created);
     } catch (err: any) {
@@ -1560,9 +1560,9 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
 
   const handleSave = () => {
     setSaveError(null);
-    const finalPublisher = ensurePublisher(publisher);
-    const finalCategory = ensureCategory(category);
     try {
+      const finalPublisher = ensurePublisher(publisher);
+      const finalCategory = ensureCategory(category);
       if (isCustom) {
         const list = getExtraProducts();
         const idx = list.findIndex((p) => p.id === product.id);
