@@ -1,0 +1,59 @@
+name: Docker build check
+
+# Sanity check that the Railway Dockerfile still builds on every change.
+# Tidak push image ke registry — cuma verify build sukses biar error
+# ketauan duluan sebelum Railway proses.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig*.json"
+      - "artifacts/api-server/**"
+      - "artifacts/viorelvar-market/**"
+      - "lib/**"
+      - "scripts/**"
+      - ".github/workflows/docker-build.yml"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Railway image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: false
+          tags: dolpay-railway:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "### Docker build" >> $GITHUB_STEP_SUMMARY
+          echo "Build status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Kalau hijau, deploy ke Railway juga harusnya sukses." >> $GITHUB_STEP_SUMMARY
