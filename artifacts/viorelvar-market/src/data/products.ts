@@ -1,5 +1,8 @@
 export type ProductCategory = string;
-export const DEFAULT_CATEGORIES: { id: string; label: string }[] = [];
+export const DEFAULT_CATEGORIES: { id: string; label: string }[] = [
+  { id: "apkmod", label: "APKMOD" },
+  { id: "root", label: "ROOT" },
+];
 
 export const REMOVED_CATEGORY_IDS: string[] = [
   "game-topup",

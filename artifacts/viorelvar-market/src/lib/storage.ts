@@ -452,8 +452,10 @@ export function getProductByIdMerged(id: string): Product | undefined {
 export type { ProductCategory };
 
 // ─── Categories (admin-managed) ───────────────────────────────────────────
-import { DEFAULT_CATEGORIES } from "@/data/products";
+import { DEFAULT_CATEGORIES, REMOVED_CATEGORY_IDS } from "@/data/products";
 export interface CategoryDef { id: string; label: string }
+
+const REMOVED_CATEGORY_SET = new Set(REMOVED_CATEGORY_IDS);
 
 export function getCategories(): CategoryDef[] {
   const raw = localStorage.getItem("pinz_categories");
@@ -461,7 +463,7 @@ export function getCategories(): CategoryDef[] {
     try {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr) && arr.every((c) => c && typeof c.id === "string" && typeof c.label === "string")) {
-        return arr;
+        return (arr as CategoryDef[]).filter((c) => !REMOVED_CATEGORY_SET.has(c.id));
       }
     } catch {}
   }
@@ -469,7 +471,7 @@ export function getCategories(): CategoryDef[] {
   const seed: CategoryDef[] = [...DEFAULT_CATEGORIES];
   const existingIds = new Set(seed.map((c) => c.id));
   PRODUCTS.forEach((p) => {
-    if (!existingIds.has(p.category)) {
+    if (!existingIds.has(p.category) && !REMOVED_CATEGORY_SET.has(p.category)) {
       seed.push({ id: p.category, label: p.category });
       existingIds.add(p.category);
     }
@@ -478,7 +480,8 @@ export function getCategories(): CategoryDef[] {
 }
 
 export function saveCategories(list: CategoryDef[]) {
-  const ok = safeSetItem("pinz_categories", JSON.stringify(list));
+  const cleaned = list.filter((c) => !REMOVED_CATEGORY_SET.has(c.id));
+  const ok = safeSetItem("pinz_categories", JSON.stringify(cleaned));
   if (!ok) throw new Error("QUOTA_EXCEEDED: pinz_categories");
   broadcastStorageChange("pinz_categories");
 }
@@ -488,6 +491,7 @@ export function addCategory(label: string): CategoryDef | null {
   if (!trimmed) return null;
   const list = getCategories();
   const id = makeSlug(trimmed, "kategori");
+  if (REMOVED_CATEGORY_SET.has(id)) return null;
   const cat: CategoryDef = { id, label: trimmed };
   list.push(cat);
   saveCategories(list);
