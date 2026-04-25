@@ -66,9 +66,13 @@ git push origin main
 1. Buka <https://railway.app/new> → **Deploy from GitHub repo**.
 2. Authorize Railway ke akun GitHub-mu (kalau belum).
 3. Pilih repo **`jeryyah/Dolpay`**.
-4. Railway akan auto-detect `Dockerfile` di root → klik **Deploy**.
+4. Railway mungkin auto-bikin **beberapa service** (1 per workspace package
+   karena ini pnpm monorepo). **Hapus semua kecuali satu**, lalu di service
+   yang tersisa: tab **Settings → Build → Builder = `Dockerfile`**, dan
+   pastikan **Root Directory** kosong / `/`.
+5. Klik **Deploy**.
 
-Build pertama makan waktu **3–6 menit** (install + build frontend + build server).
+Build pertama makan waktu **5–7 menit** (install + build frontend + build server).
 
 ### 2. Set environment variables
 

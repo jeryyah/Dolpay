@@ -73,9 +73,10 @@ COPY --from=builder /out/api-server/package.json ./package.json
 # Built static frontend
 COPY --from=builder /app/artifacts/viorelvar-market/dist/public ./public
 
-# Persistent data directory (mount a Railway Volume here for chat/sync persistence)
+# Persistent data directory — mount a Railway Volume on /data via the
+# Railway UI (Settings → Volumes). The VOLUME keyword is intentionally
+# omitted because Railway's builder rejects it.
 RUN mkdir -p /data
-VOLUME ["/data"]
 
 EXPOSE 8080
 

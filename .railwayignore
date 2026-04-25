@@ -1,0 +1,29 @@
+# Files Railway should NOT include in the build context.
+# Mirrors .dockerignore + skips Replit-only and other-host-only files.
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.cache
+.git
+.github
+.vscode
+.idea
+.DS_Store
+.replit
+.replit.nix
+.replitignore
+replit.md
+.env
+.env.*
+*.log
+logs
+coverage
+*.tar.gz
+**/.data
+
+# Other-host configs (kept in repo as fallback but unused by Railway)
+netlify
+netlify.toml
+functions
+CLOUDFLARE_DEPLOY.md
