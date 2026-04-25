@@ -29,21 +29,6 @@ const SEED_PUBLISHERS: string[] = ["CLIENT", "TEAM", "ROOT/NOROT", "CHEAT"];
 
 const SEED_PRODUCTS: Product[] = [
   {
-    id: "custom-hg-no-root",
-    title: "HG NO ROOT",
-    publisher: "CLIENT",
-    category: "key-appmod",
-    price: 10000,
-    imageUrl: "https://placehold.co/600x600/0f172a/22d3ee?text=HG+CHEATS%0ANO+ROOT",
-    isHot: true,
-    soldCount: 3130,
-    variants: [
-      { id: "1d",  label: "1 Hari",  price: 10000 },
-      { id: "7d",  label: "7 Hari",  price: 50000 },
-      { id: "30d", label: "30 Hari", price: 150000 },
-    ],
-  },
-  {
     id: "custom-dripclient-no-root",
     title: "Dripclient no root",
     publisher: "CLIENT",
