@@ -1,0 +1,5 @@
+/version.json
+  Cache-Control: no-store, must-revalidate
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
