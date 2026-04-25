@@ -1472,6 +1472,9 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
   const [imageUrl, setImageUrl] = useState(initOv.imageUrl || product.imageUrl);
   const [publisher, setPublisher] = useState(initOv.publisher || product.publisher);
   const [category, setCategory] = useState<ProductCategory>(initOv.category || product.category);
+  const [soldCount, setSoldCount] = useState<string>(
+    String(typeof initOv.soldCount === "number" ? initOv.soldCount : product.soldCount ?? 0)
+  );
 
   const [removedBaseIds, setRemovedBaseIds] = useState<Set<string>>(
     () => new Set(initOv.removedVariantIds || [])
@@ -1563,6 +1566,8 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
     try {
       const finalPublisher = ensurePublisher(publisher);
       const finalCategory = ensureCategory(category);
+      const parsedSold = Math.max(0, Math.floor(Number(soldCount)));
+      const finalSold = Number.isFinite(parsedSold) ? parsedSold : 0;
       if (isCustom) {
         const list = getExtraProducts();
         const idx = list.findIndex((p) => p.id === product.id);
@@ -1583,6 +1588,7 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
             category: finalCategory,
             variants: merged,
             price: merged[0]?.price ?? list[idx].price,
+            soldCount: finalSold,
           };
           saveExtraProducts(list);
         }
@@ -1601,6 +1607,7 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
           variantLabels,
           extraVariants: finalExtras,
           removedVariantIds: Array.from(removedBaseIds),
+          soldCount: finalSold,
         });
       }
       Object.entries(stocksByVariant).forEach(([vid, keys]) => setStockKeys(product.id, vid, keys));
@@ -1662,6 +1669,24 @@ function ProductEditModal({ product, onClose, onSaved }: { product: Product; onC
                   {cats.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                   {!cats.some((c) => c.id === category) && <option value={category}>{category} (tidak terdaftar)</option>}
                 </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                  Total Penjualan
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  value={soldCount}
+                  onChange={(e) => setSoldCount(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Angka yang ditampilkan di kartu produk sebagai &quot;Terjual&quot;.
+                </p>
               </div>
             </div>
           </div>

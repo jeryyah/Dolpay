@@ -333,6 +333,8 @@ export interface ProductOverride {
   removedVariantIds?: string[];
   /** Soft-delete flag for a base product. */
   removed?: boolean;
+  /** Admin-overridden total sold count shown on the product card. */
+  soldCount?: number;
 }
 export type ProductOverrideMap = Record<string, ProductOverride>;
 
@@ -425,6 +427,7 @@ export function applyOverride<T extends Product>(p: T): T {
     category: ov.category || p.category,
     price: variants[0]?.price ?? p.price,
     variants,
+    soldCount: typeof ov.soldCount === "number" ? ov.soldCount : p.soldCount,
   };
 }
 
