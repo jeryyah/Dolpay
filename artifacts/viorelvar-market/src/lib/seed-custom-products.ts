@@ -4,6 +4,16 @@ import { getCategories, saveCategories, getPublishers, savePublishers } from "./
 
 const SEED_FLAG = "pinz_custom_products_seeded_v1";
 const REMOVE_FLAG = "pinz_default_categories_removed_v1";
+const SOLD_BUMP_FLAG = "pinz_sold_count_bump_v1";
+
+/**
+ * One-time updates to the dummy `soldCount` of specific products. Applied to
+ * existing localStorage entries so returning users see the new totals.
+ */
+const SOLD_COUNT_OVERRIDES: Record<string, number> = {
+  "custom-dripclient-no-root": 3130,
+  "custom-prime-hook": 1200,
+};
 
 const SEED_CATEGORIES: { id: string; label: string }[] = [
   { id: "key-appmod",  label: "KEY APPMOD" },
@@ -22,7 +32,7 @@ const SEED_PRODUCTS: Product[] = [
     originalPrice: 186000,
     imageUrl: "https://placehold.co/600x600/7c3aed/ffffff?text=DRIPCLIENT%0Ano+root",
     isHot: true,
-    soldCount: 5400,
+    soldCount: 3130,
     variants: [
       { id: "1d",  label: "1 Hari",  price: 25000  },
       { id: "7d",  label: "7 Hari",  price: 75000  },
@@ -66,7 +76,7 @@ const SEED_PRODUCTS: Product[] = [
     category: "key-appmod",
     price: 15000,
     imageUrl: "https://placehold.co/600x600/65a30d/ffffff?text=PRIME+HOOK",
-    soldCount: 450,
+    soldCount: 1200,
     variants: [
       { id: "1d",  label: "1 Hari",  price: 15000  },
       { id: "7d",  label: "7 Hari",  price: 50000  },
@@ -137,6 +147,28 @@ export function seedCustomProductsIfMissing(): void {
       localStorage.setItem("pinz_extra_products", JSON.stringify(list));
     }
     localStorage.setItem(SEED_FLAG, "1");
+
+    // One-time migration: refresh dummy soldCount values for existing
+    // localStorage entries so returning users see the new totals.
+    if (!localStorage.getItem(SOLD_BUMP_FLAG)) {
+      const raw2 = localStorage.getItem("pinz_extra_products");
+      if (raw2) {
+        try {
+          const list2: Product[] = JSON.parse(raw2);
+          let bumped = false;
+          for (const p of list2) {
+            if (p.id in SOLD_COUNT_OVERRIDES) {
+              p.soldCount = SOLD_COUNT_OVERRIDES[p.id];
+              bumped = true;
+            }
+          }
+          if (bumped) {
+            localStorage.setItem("pinz_extra_products", JSON.stringify(list2));
+          }
+        } catch {}
+      }
+      localStorage.setItem(SOLD_BUMP_FLAG, "1");
+    }
   } catch {
     // Storage unavailable / quota — fail silently, admin can re-add manually.
   }
