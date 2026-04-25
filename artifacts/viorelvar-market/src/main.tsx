@@ -72,10 +72,13 @@ const root = createRoot(document.getElementById("root")!);
 
 // Pull the latest world snapshot from the server BEFORE first render so
 // brand-new visitors see the exact same products / payment / prices that
-// admin has set, instead of stale seed defaults. Wait at most 1.5s; if
-// the network is unreachable we render anyway with the local cache and
-// reconcile as soon as the next pull succeeds.
-primeCloudSync(1500).finally(() => {
+// admin has set, instead of stale seed defaults. Wait at most 5s; if the
+// network is unreachable we render anyway with the local cache and
+// reconcile as soon as the next pull succeeds. The longer timeout (was
+// 1500ms) gives slow connections a real chance to finish the snapshot
+// before render, which is also required for the cloud-sync admin-push
+// safety guard to unlock pushes.
+primeCloudSync(5000).finally(() => {
   startCloudSync(2000);
   root.render(
     <ErrorBoundary>

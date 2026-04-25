@@ -20,6 +20,17 @@
 // than the stored one. Loop guard `suppressNextSave` prevents the local
 // `pinz:storage` event triggered by an inbound pull from echoing back
 // to the server as a redundant POST.
+//
+// SAFETY GUARDS (added to fix accidental product-wipe bug):
+//   1. ADMIN_ONLY_KEYS pushes are BLOCKED until the very first pull from
+//      the server succeeds (`pullSucceeded` flag). A fresh admin tab can
+//      no longer publish its empty/stale local state before it has
+//      learned what the server already holds.
+//   2. `pinz_extra_products` pushes are rejected if they would shrink the
+//      catalog by more than half compared to what we last saw on the
+//      server, OR if they would push an empty list while the server's
+//      last known value had items. Prevents a single corrupted/empty
+//      tab from wiping the live product catalog for everyone.
 import { STORAGE_EVENT } from "./storage";
 
 const ADMIN_ONLY_KEYS = new Set<string>([
@@ -58,6 +69,10 @@ const ENDPOINT = "/api/sync";
 const PUSH_DEBOUNCE_MS = 250;
 
 const lastSeenV: Record<string, number> = {};
+// Track the length of the array/object we last saw on the server for keys
+// that hold list-like data. Used by the catalog wipe guard so we can
+// detect when a local push would dramatically shrink the remote list.
+const lastSeenItemCount: Record<string, number> = {};
 const suppressNextSave = new Set<string>();
 const pushTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
 let started = false;
@@ -84,7 +99,59 @@ function canPush(key: string): boolean {
   // Admin-only keys may only be pushed by an admin/owner session, so a
   // first-time visitor with seed defaults can never overwrite the
   // canonical config admin has set on the server.
-  if (ADMIN_ONLY_KEYS.has(key)) return isAdmin();
+  if (ADMIN_ONLY_KEYS.has(key)) {
+    if (!isAdmin()) return false;
+    // Critical guard: never push admin-only state until we have at least
+    // one confirmed pull from the server. Otherwise a fresh admin tab
+    // (empty / stale localStorage) could clobber the live catalog the
+    // moment it touches anything that triggers a save.
+    if (!pullSucceeded) return false;
+  }
+  return true;
+}
+
+/**
+ * Count items in a JSON-ish localStorage value. Returns -1 when the
+ * value can't be parsed or doesn't look like a list/object — meaning the
+ * shrinkage guard should not apply.
+ */
+function countItems(rawValue: string | null): number {
+  if (rawValue == null) return 0;
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (Array.isArray(parsed)) return parsed.length;
+    if (parsed && typeof parsed === "object") return Object.keys(parsed).length;
+    return -1;
+  } catch {
+    return -1;
+  }
+}
+
+/**
+ * Anti-wipe guard for catalog-style keys. Returns false if the new local
+ * value would dramatically shrink (or empty out) what we last saw on the
+ * server, so a corrupted / empty tab cannot wipe the live catalog.
+ *
+ * Currently applies to: pinz_extra_products, pinz_product_overrides,
+ * pinz_categories, pinz_publishers.
+ */
+function isSafeShrink(key: string, value: string | null): boolean {
+  const guardedKeys = new Set([
+    "pinz_extra_products",
+    "pinz_product_overrides",
+    "pinz_categories",
+    "pinz_publishers",
+  ]);
+  if (!guardedKeys.has(key)) return true;
+  const remoteCount = lastSeenItemCount[key];
+  // No baseline yet — allow (we trust the very first push).
+  if (typeof remoteCount !== "number" || remoteCount <= 0) return true;
+  const localCount = countItems(value);
+  if (localCount < 0) return true; // unparseable — leave alone
+  // Block: pushing 0 items while server had items.
+  if (localCount === 0 && remoteCount > 0) return false;
+  // Block: pushing fewer than half of the items we last saw.
+  if (localCount * 2 < remoteCount) return false;
   return true;
 }
 
@@ -92,6 +159,21 @@ async function pushKey(key: string): Promise<void> {
   if (!isBrowser() || !canPush(key)) return;
   try {
     const value = localStorage.getItem(key);
+    // Anti-wipe guard: refuse to push a value that would dramatically
+    // shrink the live catalog. The next pull will reconcile if local
+    // really is meant to be empty (admin can use the panel's explicit
+    // delete-all flow which performs a fresh push after a reload).
+    if (!isSafeShrink(key, value)) {
+      console.warn(
+        `[cloud-sync] Push for ${key} blocked — local has ` +
+        `${countItems(value)} items but server last had ` +
+        `${lastSeenItemCount[key]}. Pulling fresh data instead.`,
+      );
+      // Trigger an immediate pull so the local stale snapshot is
+      // overwritten by the canonical server state.
+      void pullAll();
+      return;
+    }
     const res = await fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,7 +181,15 @@ async function pushKey(key: string): Promise<void> {
     });
     if (!res.ok) return;
     const data = await res.json().catch(() => null);
-    if (data && typeof data.v === "number") lastSeenV[key] = data.v;
+    if (data && typeof data.v === "number") {
+      lastSeenV[key] = data.v;
+      // The server echoes back the value it actually stored — refresh
+      // our shrink-guard baseline with the authoritative item count.
+      const storedValue: string | null =
+        typeof data.value === "string" ? data.value : null;
+      const stored = countItems(storedValue);
+      if (stored >= 0) lastSeenItemCount[key] = stored;
+    }
   } catch {
     /* offline / network — next pull will reconcile */
   }
@@ -126,6 +216,10 @@ async function pullAll(): Promise<void> {
     for (const k of SYNCED_KEYS) {
       const remote = world?.[k];
       if (!remote || typeof remote.v !== "number") continue;
+      // Always refresh the shrink-guard baseline from the server so the
+      // anti-wipe check has accurate data even when we skip apply below.
+      const remoteCount = countItems(remote.value);
+      if (remoteCount >= 0) lastSeenItemCount[k] = remoteCount;
       if (lastSeenV[k] && remote.v <= lastSeenV[k]) continue;
       lastSeenV[k] = remote.v;
       const localStr = localStorage.getItem(k);
@@ -163,8 +257,12 @@ async function pullAll(): Promise<void> {
  * admin/owner, any whitelisted local key the server is missing is
  * uploaded (one-time bootstrap so the admin's existing local config
  * seeds the server on first deploy).
+ *
+ * Bumped from 1500ms → 5000ms because failing to receive the snapshot
+ * before render leaves admin sessions vulnerable to the "empty local
+ * pushes empty to server" wipe scenario.
  */
-export async function primeCloudSync(timeoutMs = 1500): Promise<void> {
+export async function primeCloudSync(timeoutMs = 5000): Promise<void> {
   if (!isBrowser()) return;
   await Promise.race([
     pullAll(),
@@ -176,6 +274,15 @@ export async function primeCloudSync(timeoutMs = 1500): Promise<void> {
       if (local !== null && !lastSeenV[k]) schedulePush(k);
     }
   }
+}
+
+/**
+ * Returns true once the first server pull has completed. UI components
+ * (e.g. admin product manager) can use this to render a loading state
+ * instead of a misleading "0 products" view when the network is slow.
+ */
+export function isCloudSyncPrimed(): boolean {
+  return pullSucceeded;
 }
 
 /**
