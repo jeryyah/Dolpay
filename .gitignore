@@ -47,7 +47,3 @@ Thumbs.db
 # Replit
 .cache/
 .local/
-
-# Generated bundle (served from GitHub Releases instead)
-artifacts/*/public/viorelvar-project.tar.gz
-
