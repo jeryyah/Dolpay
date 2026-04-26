@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { HelpCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-const TG_USERNAME = "KhanCheatsVip";
+const TG_USERNAME = "VIORELVAR321";
 const TG_CHANNEL = "https://t.me/GURUGAMING_UPDATE";
 
 const ITEMS = [

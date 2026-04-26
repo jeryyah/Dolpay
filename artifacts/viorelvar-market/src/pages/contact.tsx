@@ -4,7 +4,7 @@ import { HelpBar } from "@/components/help-bar";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 
-const TG_USERNAME = "KhanCheatsVip";
+const TG_USERNAME = "VIORELVAR321";
 
 export default function Contact() {
   const { t } = useTranslation();
