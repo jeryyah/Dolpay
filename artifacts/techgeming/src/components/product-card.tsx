@@ -29,7 +29,7 @@ export function ProductCard({ product: rawProduct }: ProductCardProps) {
     <>
       <div
         onClick={() => setShowModal(true)}
-        className="group relative bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(217,249,93,0.1)] hover:-translate-y-1 cursor-pointer"
+        className="group relative bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(242,194,92,0.18)] hover:-translate-y-1 cursor-pointer"
       >
         {/* Wishlist heart */}
         <button

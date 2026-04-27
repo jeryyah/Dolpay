@@ -74,49 +74,49 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 230 22% 6%;
-  --foreground: 220 20% 96%;
-  --border: 230 18% 16%;
-  --input: 230 18% 14%;
-  --ring: 270 90% 65%;
+  --background: 36 18% 4%;
+  --foreground: 42 25% 96%;
+  --border: 36 14% 14%;
+  --input: 36 14% 11%;
+  --ring: 42 90% 58%;
 
-  --card: 230 22% 8%;
-  --card-foreground: 220 20% 96%;
-  --card-border: 230 18% 16%;
+  --card: 36 16% 7%;
+  --card-foreground: 42 25% 96%;
+  --card-border: 36 14% 14%;
 
-  --popover: 230 24% 9%;
-  --popover-foreground: 220 20% 96%;
-  --popover-border: 230 18% 18%;
+  --popover: 36 18% 8%;
+  --popover-foreground: 42 25% 96%;
+  --popover-border: 36 14% 16%;
 
-  --primary: 270 90% 65%;
-  --primary-foreground: 230 22% 6%;
+  --primary: 42 90% 58%;
+  --primary-foreground: 36 18% 4%;
 
-  --secondary: 230 18% 14%;
-  --secondary-foreground: 220 20% 96%;
+  --secondary: 36 14% 11%;
+  --secondary-foreground: 42 25% 96%;
 
-  --muted: 230 16% 12%;
-  --muted-foreground: 220 12% 65%;
+  --muted: 36 12% 10%;
+  --muted-foreground: 42 8% 62%;
 
-  --accent: 190 95% 55%;
-  --accent-foreground: 230 22% 6%;
+  --accent: 42 95% 65%;
+  --accent-foreground: 36 18% 4%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --chart-1: 270 90% 65%;
-  --chart-2: 190 95% 55%;
+  --chart-1: 42 95% 60%;
+  --chart-2: 38 90% 70%;
   --chart-3: 142 71% 45%;
-  --chart-4: 38 92% 60%;
-  --chart-5: 340 82% 60%;
+  --chart-4: 28 92% 55%;
+  --chart-5: 50 95% 55%;
 
-  --sidebar: 230 24% 7%;
-  --sidebar-foreground: 220 20% 96%;
-  --sidebar-border: 230 18% 16%;
-  --sidebar-primary: 270 90% 65%;
-  --sidebar-primary-foreground: 230 22% 6%;
-  --sidebar-accent: 190 95% 55%;
-  --sidebar-accent-foreground: 230 22% 6%;
-  --sidebar-ring: 270 90% 65%;
+  --sidebar: 36 18% 5%;
+  --sidebar-foreground: 42 25% 96%;
+  --sidebar-border: 36 14% 12%;
+  --sidebar-primary: 42 90% 58%;
+  --sidebar-primary-foreground: 36 18% 4%;
+  --sidebar-accent: 42 95% 65%;
+  --sidebar-accent-foreground: 36 18% 4%;
+  --sidebar-ring: 42 90% 58%;
 
   --app-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --app-font-serif: Georgia, serif;
@@ -211,20 +211,37 @@
   .aurora::before, .aurora::after {
     content: ""; position: absolute; inset: -25%;
     background:
-      radial-gradient(40% 35% at 30% 30%, hsl(270 95% 55% / .55), transparent 60%),
-      radial-gradient(35% 30% at 75% 25%, hsl(190 95% 55% / .45), transparent 60%),
-      radial-gradient(45% 40% at 60% 80%, hsl(340 85% 60% / .40), transparent 60%),
-      radial-gradient(35% 30% at 15% 85%, hsl(220 95% 60% / .40), transparent 60%);
-    filter: blur(70px) saturate(140%);
+      radial-gradient(40% 35% at 30% 30%, hsl(42 95% 50% / .35), transparent 60%),
+      radial-gradient(35% 30% at 75% 25%, hsl(38 90% 60% / .28), transparent 60%),
+      radial-gradient(45% 40% at 60% 80%, hsl(28 90% 50% / .26), transparent 60%),
+      radial-gradient(35% 30% at 15% 85%, hsl(50 95% 55% / .26), transparent 60%);
+    filter: blur(80px) saturate(140%);
     animation: aurora-drift 26s ease-in-out infinite alternate;
     will-change: transform, opacity;
     transform: translateZ(0);
   }
   .aurora::after {
     background:
-      radial-gradient(35% 30% at 80% 70%, hsl(280 95% 60% / .50), transparent 60%),
-      radial-gradient(30% 25% at 20% 40%, hsl(180 95% 50% / .40), transparent 60%);
+      radial-gradient(35% 30% at 80% 70%, hsl(42 95% 55% / .30), transparent 60%),
+      radial-gradient(30% 25% at 20% 40%, hsl(50 95% 60% / .24), transparent 60%);
     animation-duration: 32s; animation-direction: alternate-reverse; opacity: .8;
+  }
+
+  /* Gold premium utilities */
+  .text-gold-grad {
+    background: linear-gradient(135deg, #FFE9A8 0%, #F2C25C 30%, #D4972A 55%, #FFE9A8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-gold-grad {
+    background: linear-gradient(135deg, #FFE9A8 0%, #F2C25C 30%, #D4972A 55%, #B07614 100%);
+  }
+  .border-gold {
+    border-color: rgba(212,151,42,.35);
+  }
+  .glow-gold {
+    box-shadow: 0 0 0 1px rgba(212,151,42,.18), 0 12px 40px -10px rgba(212,151,42,.35);
   }
 
   /* ─── Mobile / low-power perf safeguards ───

@@ -41,7 +41,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
 });
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/", "/faq", "/contact", "/developer"];
 
 const APP_VERSION = "v7-2026-04-24-tiers-invoiceid";
 

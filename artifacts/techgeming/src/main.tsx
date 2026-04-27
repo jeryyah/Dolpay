@@ -6,6 +6,17 @@ import { ErrorBoundary, installGlobalErrorHandlers } from "./components/error-bo
 import { primeCloudSync, startCloudSync } from "./lib/cloud-sync";
 
 installGlobalErrorHandlers();
+// Seed demo products on first visit so the catalog isn't empty for new guests.
+try {
+  // Lazy import to avoid pulling on every reload after seed.
+  if (typeof window !== "undefined" && !localStorage.getItem("techgeming_seed_v1")) {
+    import("./lib/seed-custom-products").then((m) => {
+      m.seedCustomProductsIfMissing?.();
+      localStorage.setItem("techgeming_seed_v1", "1");
+      window.dispatchEvent(new CustomEvent("pinz:storage", { detail: { key: "pinz_extra_products" } }));
+    });
+  }
+} catch {}
 // NOTE: `seedCustomProductsIfMissing()` deliberately NOT called here. The
 // admin product catalog is now sourced exclusively from the live cloud
 // (Netlify Blobs) — see cloud-sync.ts. Auto-seeding placeholder products

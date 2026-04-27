@@ -7,6 +7,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { CaptchaInput } from "@/components/captcha";
 import { applyReferralCode } from "@/lib/extra-storage";
+import { TGMonogram } from "@/components/brand/tg-monogram";
 
 export default function Login() {
   const { login, register, user, isAdmin } = useAuth();
@@ -109,11 +110,9 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-4">
-            <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-              <Zap className="h-6 w-6" />
-            </div>
-            <span className="font-bold text-2xl tracking-tight">
-              TECH<span className="text-primary">GEMING</span>
+            <TGMonogram size={48} />
+            <span className="font-black text-2xl tracking-tight text-gold-grad">
+              TECHGEMING
             </span>
           </div>
           <p className="text-muted-foreground text-sm">Platform cheat & topup gaming terpercaya</p>

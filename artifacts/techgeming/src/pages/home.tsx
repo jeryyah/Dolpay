@@ -1,24 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { Navbar, Footer } from "@/components/layout/navbar";
-import { HelpBar } from "@/components/help-bar";
-import { BuyerActivity } from "@/components/buyer-activity";
-import { type ProductCategory } from "@/data/products";
-import { getAllProducts, getCategories } from "@/lib/storage";
-import { ProductCard } from "@/components/product-card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Gamepad2, Gift, Zap, SearchIcon, Megaphone, X,
-  Shield, RotateCcw, Mail, Lock, Trophy, Crown, Award, Medal, Sparkles,
-  ShoppingBag, ChevronRight, UserPlus, Heart, Bell, MessageCircle, Flame,
+  ShieldCheck, Zap, Lock, RefreshCw,
+  ChevronRight, ChevronLeft, Crown, Sparkles, Award, Medal,
+  Send, Smartphone, HelpCircle, Headphones,
+  Shield, Star, Headset, Megaphone, X, Search as SearchIcon, Gamepad2,
 } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { getAnnouncement, getUserLevel, getUserOrders, warrantyInfo } from "@/lib/storage";
-import { useStorageVersion } from "@/lib/use-live-storage";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart,
+} from "recharts";
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import { Button } from "@/components/ui/button";
+import { ProductCard } from "@/components/product-card";
+import { TGMonogramHero } from "@/components/brand/tg-monogram";
 import { useAuth } from "@/lib/auth-context";
-import { formatCurrency } from "@/lib/utils";
-import { getUserExt, getWishlist, getUserNotifs } from "@/lib/extra-storage";
+import { getAllProducts, getCategories, getUserLevel, getUserOrders, getAnnouncement } from "@/lib/storage";
+import { useStorageVersion } from "@/lib/use-live-storage";
+import { type ProductCategory } from "@/data/products";
 
 const TIER_ICON: Record<string, React.ReactNode> = {
   Bronze: <Medal className="w-3.5 h-3.5" />,
@@ -27,322 +25,492 @@ const TIER_ICON: Record<string, React.ReactNode> = {
   VIP:    <Sparkles className="w-3.5 h-3.5" />,
 };
 
-type Badge = {
-  label: string;          // text shown inside the bubble (e.g. "3", "!", "•")
-  tone: "danger" | "warning" | "info" | "success";
-  pulse?: boolean;
-  title?: string;         // tooltip/aria
-};
-
-type Tile = {
-  href: string;
-  title: string;
-  desc: string;
-  icon: React.ReactNode;
-  ring: string;
-  iconBg: string;
-  iconFg: string;
-  badge?: Badge;
-};
-
-const BASE_TILES: Tile[] = [
-  { href: "/garansi",       title: "Garansi Key",   desc: "30 hari · auto klaim",   icon: <Shield className="w-5 h-5" />,    ring: "from-emerald-500/40 to-emerald-500/0",  iconBg: "bg-emerald-500/15", iconFg: "text-emerald-300" },
-  { href: "/replace-key",   title: "Replace Key",   desc: "1× saat garansi",        icon: <RotateCcw className="w-5 h-5" />, ring: "from-amber-500/40 to-amber-500/0",      iconBg: "bg-amber-500/15",   iconFg: "text-amber-300"   },
-  { href: "/backup-email",  title: "Backup Email",  desc: "Kirim key ulang",        icon: <Mail className="w-5 h-5" />,      ring: "from-sky-500/40 to-sky-500/0",          iconBg: "bg-sky-500/15",     iconFg: "text-sky-300"     },
-  { href: "/wishlist",      title: "Wishlist",      desc: "Produk favoritmu",       icon: <Heart className="w-5 h-5" />,     ring: "from-rose-500/40 to-rose-500/0",        iconBg: "bg-rose-500/15",    iconFg: "text-rose-300"    },
-  { href: "/referral",      title: "Referral",      desc: "Ajak teman, dapat bonus",icon: <Gift className="w-5 h-5" />,      ring: "from-violet-500/40 to-violet-500/0",    iconBg: "bg-violet-500/15",  iconFg: "text-violet-300"  },
-  { href: "/chat",          title: "Live Chat",     desc: "Tanya admin langsung",   icon: <MessageCircle className="w-5 h-5"/>,ring: "from-cyan-500/40 to-cyan-500/0",       iconBg: "bg-cyan-500/15",    iconFg: "text-cyan-300"    },
-  { href: "/notifications", title: "Notifikasi",    desc: "Update terbaru",         icon: <Bell className="w-5 h-5" />,      ring: "from-orange-500/40 to-orange-500/0",    iconBg: "bg-orange-500/15",  iconFg: "text-orange-300"  },
-  { href: "/leaderboard",   title: "Top Buyer",     desc: "Hadiah bulanan",         icon: <Trophy className="w-5 h-5" />,    ring: "from-yellow-500/40 to-yellow-500/0",    iconBg: "bg-yellow-500/15",  iconFg: "text-yellow-300"  },
-  { href: "/pin",           title: "PIN Keamanan",  desc: "Kunci key dengan PIN 4–6 digit", icon: <Lock className="w-5 h-5" />,        ring: "from-fuchsia-500/40 to-fuchsia-500/0", iconBg: "bg-fuchsia-500/15", iconFg: "text-fuchsia-300" },
-  { href: "/history",       title: "Riwayat",       desc: "Lihat semua key & status",   icon: <ShoppingBag className="w-5 h-5" />, ring: "from-primary/50 to-primary/0",         iconBg: "bg-primary/15",     iconFg: "text-primary"     },
-];
-
-const BADGE_TONE: Record<Badge["tone"], string> = {
-  danger:  "bg-rose-500 text-white ring-2 ring-rose-500/30 shadow-lg shadow-rose-500/30",
-  warning: "bg-amber-400 text-black ring-2 ring-amber-400/30 shadow-lg shadow-amber-500/30",
-  info:    "bg-sky-400  text-black ring-2 ring-sky-400/30  shadow-lg shadow-sky-500/30",
-  success: "bg-emerald-400 text-black ring-2 ring-emerald-400/30 shadow-lg shadow-emerald-500/30",
-};
-
-function useTileBadges(): Record<string, Badge | undefined> {
-  const { user } = useAuth();
-  if (!user) return {};
-
-  const orders   = getUserOrders(user.id);
-  const verified = orders.filter((o) => (o.status === "verified" || o.status === "paid") && o.key);
-
-  // Garansi: jumlah garansi aktif yang habis dalam ≤ 7 hari
-  const expiringSoon = verified.filter((o) => {
-    if (o.warrantyClaimedAt) return false;
-    const w = warrantyInfo(o);
-    return w.active && w.daysLeft <= 7;
-  }).length;
-
-  // Replace Key: jumlah order yang masih bisa di-replace
-  const replaceable = verified.filter((o) => {
-    if (o.replacedAt) return false;
-    const w = warrantyInfo(o);
-    return w.active;
-  }).length;
-
-  // Backup Email: jumlah key yang belum pernah dikirim ke email
-  const neverBackedUp = verified.filter((o) => !o.backupSentAt).length;
-
-  // PIN: belum diset
-  const pinMissing = !user.pin;
-
-  // Riwayat: order pending / pending_verify / cancelled (perlu perhatian)
-  const needsAttention = orders.filter(
-    (o) => o.status === "pending" || o.status === "pending_verify",
-  ).length;
-
-  const wishCount = getWishlist(user.id).length;
-  const unreadNotif = getUserNotifs(user.id).filter((n: any) => !n.read).length;
-
-  return {
-    "/garansi":      expiringSoon  > 0 ? { label: String(expiringSoon),  tone: "warning", pulse: true, title: `${expiringSoon} garansi habis ≤ 7 hari` } : undefined,
-    "/replace-key":  replaceable   > 0 ? { label: String(replaceable),   tone: "info",                  title: `${replaceable} order bisa di-replace` } : undefined,
-    "/backup-email": neverBackedUp > 0 ? { label: String(neverBackedUp), tone: "info",                  title: `${neverBackedUp} key belum di-backup` } : undefined,
-    "/pin":          pinMissing        ? { label: "!",                   tone: "danger",  pulse: true, title: "PIN keamanan belum aktif" } : undefined,
-    "/history":      needsAttention> 0 ? { label: String(needsAttention),tone: "danger",  pulse: true, title: `${needsAttention} order menunggu` } : undefined,
-    "/wishlist":     wishCount     > 0 ? { label: String(wishCount),     tone: "info",                  title: `${wishCount} produk di wishlist` } : undefined,
-    "/notifications":unreadNotif   > 0 ? { label: String(unreadNotif),   tone: "danger",  pulse: true, title: `${unreadNotif} notifikasi baru` } : undefined,
-  };
-}
-
-function StreakBanner() {
-  const { user } = useAuth();
-  if (!user) return null;
-  const ext = getUserExt(user.id);
-  const streakRaw = (ext as any)?.streak;
-  const streak = typeof streakRaw === "number" ? streakRaw : Number(streakRaw?.current) || 0;
-  if (streak < 1) return null;
-  const next7 = Math.ceil(streak / 7) * 7;
-  const toNext = next7 - streak;
-  return (
-    <div className="container mx-auto px-4 mt-3 relative z-10">
-      <div className="relative overflow-hidden rounded-2xl border border-orange-500/30 bg-gradient-to-r from-orange-600/20 via-amber-500/10 to-rose-500/20 p-3 sm:p-4 flex items-center gap-3">
-        <div className="w-11 h-11 rounded-2xl bg-orange-500/30 text-orange-300 flex items-center justify-center shrink-0 animate-pulse">
-          <Flame className="w-6 h-6" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-extrabold leading-tight">
-            🔥 Login Streak: <span className="text-orange-300">{streak} hari</span> berturut-turut!
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            {toNext === 0 ? "Cek notifikasi — bonus streak masuk!" : `${toNext} hari lagi untuk bonus streak berikutnya (Rp${(next7 * 1000).toLocaleString("id-ID")})`}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FeatureHero() {
+/* ────────── HERO — Welcome card with TG monogram ────────── */
+function WelcomeHero() {
   const { user } = useAuth();
   const lvl = user ? getUserLevel(user.id) : null;
-  const orderCount = user
-    ? getUserOrders(user.id).filter((o) => o.status === "verified" || o.status === "paid").length
+  const memberDays = user
+    ? Math.max(1, Math.floor((Date.now() - new Date(user.createdAt || Date.now()).getTime()) / 86400000))
     : 0;
-  const badges = useTileBadges();
 
-  // Solid card surface — no transparency, so aurora can't bleed through
-  const SURFACE = "bg-[hsl(230_22%_9%)]";
+  const QUICK_STATS = [
+    { icon: <ShieldCheck className="w-4 h-4" />, title: "Garansi Key",       sub: "30 Hari" },
+    { icon: <Zap className="w-4 h-4" />,         title: "Instant Delivery",  sub: "1–5 Menit" },
+    { icon: <Lock className="w-4 h-4" />,        title: "Aman & Terpercaya", sub: "100% Aman" },
+    { icon: <RefreshCw className="w-4 h-4" />,   title: "Update Rutin",      sub: "Setiap Hari" },
+  ];
 
   return (
-    <section className="container mx-auto px-4 pt-6 pb-2 relative z-10">
-      {/* Status / login card */}
-      {user ? (
-        <div className={`relative overflow-hidden rounded-2xl border border-white/5 ${SURFACE} p-4 sm:p-5 mb-4`}>
-          <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
-          <div className="relative flex items-center gap-3 sm:gap-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-[hsl(230_22%_14%)] flex items-center justify-center text-base sm:text-lg font-extrabold border border-white/10 shrink-0">
-              {user.avatarBase64
-                ? <img src={user.avatarBase64} alt="" className="w-full h-full object-cover" />
-                : (user.nickname || user.username)[0]?.toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] text-muted-foreground">Selamat datang kembali,</p>
-              <p className="font-extrabold truncate">@{user.nickname || user.username}</p>
-              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                {lvl && (
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r ${lvl.gradient} text-black shadow-md`}>
-                    {TIER_ICON[lvl.tier]} {lvl.tier}
-                  </span>
-                )}
-                <span className="text-[10px] text-muted-foreground">
-                  {orderCount} pembelian · Total {lvl ? formatCurrency(lvl.totalSpend) : "Rp 0"}
-                </span>
-              </div>
-            </div>
-            <Link href="/profile">
-              <a className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-primary border border-primary/30 px-3 py-1.5 rounded-lg hover:bg-primary/10">
-                Profil <ChevronRight className="w-3.5 h-3.5" />
-              </a>
-            </Link>
-          </div>
-          {lvl?.next && (
-            <div className="relative mt-3">
-              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                <span>Menuju {lvl.next.tier}</span>
-                <span>Belanja {formatCurrency(lvl.next.need)} lagi</span>
-              </div>
-              <div className="h-1.5 bg-[hsl(230_22%_14%)] rounded-full overflow-hidden">
-                <div
-                  className={`h-full bg-gradient-to-r ${lvl.gradient} transition-all`}
-                  style={{ width: `${Math.min(100, (lvl.totalSpend / (lvl.totalSpend + lvl.next.need)) * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className={`relative overflow-hidden rounded-2xl border border-primary/40 ${SURFACE} p-4 sm:p-5 mb-4 flex items-center gap-3`}>
-          <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-primary/25 blur-3xl pointer-events-none" />
-          <div className="relative w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center shrink-0">
-            <UserPlus className="w-5 h-5" />
-          </div>
-          <div className="relative flex-1 min-w-0">
-            <p className="font-bold text-sm">Login dulu untuk akses semua fitur</p>
-            <p className="text-[11px] text-muted-foreground">Garansi key, replace, backup email & leaderboard.</p>
-          </div>
-          <Link href="/login">
-            <a className="relative text-xs font-extrabold bg-primary text-primary-foreground px-3 py-2 rounded-xl hover:brightness-110 shrink-0">Masuk</a>
-          </Link>
-        </div>
-      )}
+    <section className="relative">
+      <div className="relative overflow-hidden rounded-[28px] border border-amber-500/20 bg-gradient-to-br from-[#15110a] via-[#0d0a05] to-black p-6 sm:p-8">
+        {/* Decorative grid */}
+        <div className="absolute inset-0 opacity-[.07] pointer-events-none"
+             style={{
+               backgroundImage:
+                 "linear-gradient(to right, rgba(242,194,92,.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(242,194,92,.6) 1px, transparent 1px)",
+               backgroundSize: "40px 40px",
+               maskImage: "radial-gradient(ellipse 60% 80% at 80% 50%, #000 30%, transparent 80%)",
+               WebkitMaskImage: "radial-gradient(ellipse 60% 80% at 80% 50%, #000 30%, transparent 80%)",
+             }}
+        />
+        {/* Glow */}
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-12 w-72 h-72 rounded-full bg-amber-700/10 blur-3xl pointer-events-none" />
 
-      {/* Round icon menu — Gojek / Shopee style */}
-      <div className={`relative overflow-hidden rounded-2xl ${SURFACE} border border-white/5 px-2 py-4`}>
-        <div className="grid grid-cols-5 sm:grid-cols-6 gap-y-4">
-          {BASE_TILES.map((t, i) => {
-            const b = badges[t.href];
-            return (
-              <Link key={i} href={t.href}>
-                <a className="group flex flex-col items-center gap-1.5 px-1" title={b?.title}>
-                  <div className={`relative w-12 h-12 rounded-2xl ${t.iconBg} ${t.iconFg} flex items-center justify-center transition-transform group-active:scale-90 group-hover:scale-105`}>
-                    {t.icon}
-                    {b && (
-                      <span
-                        aria-label={b.title || b.label}
-                        className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-extrabold flex items-center justify-center leading-none ${BADGE_TONE[b.tone]} ${b.pulse ? "animate-pulse" : ""}`}
-                      >
-                        {b.label}
-                      </span>
-                    )}
+        <div className="relative grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-center">
+          <div className="min-w-0">
+            <p className="text-xs sm:text-sm text-muted-foreground">Selamat datang kembali,</p>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight truncate">
+                {user ? (user.nickname || user.username) : "Gamer"}
+              </h1>
+              {lvl && (
+                <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-gradient-to-r ${lvl.gradient} text-black shadow-lg`}>
+                  {TIER_ICON[lvl.tier]} {lvl.tier}
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground">
+              {user ? `Member sejak ${memberDays} hari yang lalu` : "Login dulu untuk akses semua fitur premium"}
+            </p>
+
+            {/* Quick stats */}
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {QUICK_STATS.map((s, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-amber-500/15 bg-black/40 backdrop-blur-sm px-3 py-3 hover:border-amber-500/40 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-300 flex items-center justify-center mb-1.5">
+                    {s.icon}
                   </div>
-                  <p className="text-[10.5px] font-semibold text-center leading-tight text-foreground/90 line-clamp-2">{t.title}</p>
-                </a>
-              </Link>
-            );
-          })}
+                  <p className="text-[12px] font-bold leading-tight">{s.title}</p>
+                  <p className="text-[10.5px] text-muted-foreground">{s.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* TG monogram visual */}
+          <div className="hidden md:block shrink-0">
+            <TGMonogramHero />
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
+/* ────────── POPULAR PRODUCTS — horizontal scroll carousel ────────── */
+function PopularProducts() {
+  const storageVer = useStorageVersion();
+  const products = React.useMemo(() => {
+    return getAllProducts()
+      .slice()
+      .sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0))
+      .slice(0, 10);
+  }, [storageVer]);
+
+  const trackRef = React.useRef<HTMLDivElement>(null);
+  const scroll = (dir: 1 | -1) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * 320, behavior: "smooth" });
+  };
+
+  if (products.length === 0) return null;
+
+  return (
+    <section className="mt-6">
+      <div className="flex items-end justify-between mb-4 px-1">
+        <div>
+          <h2 className="text-lg sm:text-xl font-black flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-300" />
+            Produk Terpopuler
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/wishlist">
+            <a className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-amber-300 hover:text-amber-200">
+              Lihat Semua <ChevronRight className="w-3.5 h-3.5" />
+            </a>
+          </Link>
+          <button
+            onClick={() => scroll(-1)}
+            className="hidden sm:inline-flex w-9 h-9 rounded-full border border-border/60 bg-card hover:border-amber-500/40 items-center justify-center"
+            aria-label="Geser kiri"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => scroll(1)}
+            className="hidden sm:inline-flex w-9 h-9 rounded-full border border-border/60 bg-card hover:border-amber-500/40 items-center justify-center"
+            aria-label="Geser kanan"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div
+        ref={trackRef}
+        className="flex gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-2 -mx-1 px-1"
+      >
+        {products.map((p) => (
+          <div key={p.id} className="snap-start shrink-0 w-[210px] sm:w-[230px]">
+            <ProductCard product={p} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ────────── ACTIVITY SUMMARY — stats + line chart ────────── */
+function ActivitySummary() {
+  const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
+
+  // Synthetic but stable activity series
+  const data = React.useMemo(() => {
+    const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+    const out: { day: string; value: number }[] = [];
+    let v = 600;
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      v = Math.max(120, Math.min(1500, v + (Math.sin(i * 0.6) * 220) + (Math.random() * 120 - 60)));
+      out.push({
+        day: d.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+        value: Math.round(v),
+      });
+    }
+    return out;
+  }, [range]);
+
+  const peak = React.useMemo(() => data.reduce((m, x) => (x.value > m.value ? x : m), data[0]), [data]);
+
+  const STATS = [
+    { icon: <Sparkles className="w-4 h-4" />, label: "Total Pengunjung", value: "15.470+", delta: "+12,5%", up: true },
+    { icon: <Star className="w-4 h-4" />,    label: "Transaksi Sukses", value: "99,8%",   delta: "+2,1%",  up: true },
+    { icon: <Zap className="w-4 h-4" />,     label: "Waktu Rata-rata",  value: "2m 40d",  delta: "-8,7%",  up: true },
+    { icon: <Crown className="w-4 h-4" />,   label: "Produk Terjual",   value: "1.249",   delta: "+15,4%", up: true },
+  ];
+
+  return (
+    <section className="mt-8">
+      <div className="rounded-3xl border border-amber-500/15 bg-[hsl(36_16%_6%)] p-5 sm:p-6 relative overflow-hidden">
+        <div className="absolute -top-20 -right-10 w-72 h-72 rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
+
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <h2 className="text-lg sm:text-xl font-black flex items-center gap-2">
+            <span className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-300 flex items-center justify-center">
+              <Sparkles className="w-4 h-4" />
+            </span>
+            Ringkasan Aktivitas
+          </h2>
+          <div className="relative">
+            <select
+              value={range}
+              onChange={(e) => setRange(e.target.value as any)}
+              className="appearance-none cursor-pointer text-xs font-bold bg-black/40 border border-border/60 hover:border-amber-500/40 rounded-xl pl-3 pr-8 py-2 focus:outline-none"
+            >
+              <option value="7d">7 Hari Terakhir</option>
+              <option value="30d">30 Hari Terakhir</option>
+              <option value="90d">90 Hari Terakhir</option>
+            </select>
+            <ChevronRight className="w-3.5 h-3.5 rotate-90 absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="relative grid grid-cols-1 md:grid-cols-[230px_1fr] gap-5">
+          {/* Stats column */}
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-2.5">
+            {STATS.map((s, i) => (
+              <div
+                key={i}
+                className="rounded-2xl border border-border/60 bg-black/30 px-3 py-2.5 flex items-start gap-2.5"
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-300 flex items-center justify-center shrink-0">
+                  {s.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-muted-foreground leading-tight">{s.label}</p>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <p className="text-base font-extrabold">{s.value}</p>
+                    <span className={`text-[10px] font-bold ${s.up ? "text-emerald-400" : "text-rose-400"}`}>
+                      {s.delta}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Chart */}
+          <div className="relative h-[260px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#F2C25C" stopOpacity={0.45} />
+                    <stop offset="100%" stopColor="#F2C25C" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="rgba(255,255,255,.05)" vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  stroke="rgba(255,255,255,.45)"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={Math.max(0, Math.floor(data.length / 6) - 1)}
+                />
+                <YAxis
+                  stroke="rgba(255,255,255,.35)"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : `${v}`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "rgba(0,0,0,.9)",
+                    border: "1px solid rgba(242,194,92,.35)",
+                    borderRadius: 12,
+                    fontSize: 12,
+                    color: "#fff",
+                  }}
+                  cursor={{ stroke: "rgba(242,194,92,.4)", strokeWidth: 1 }}
+                  formatter={(v: number) => [`${v.toLocaleString("id-ID")} aktivitas`, ""]}
+                  labelStyle={{ color: "#F2C25C", fontWeight: 700 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#F2C25C"
+                  strokeWidth={2.5}
+                  fill="url(#goldFill)"
+                  dot={false}
+                  activeDot={{ r: 5, fill: "#FFE9A8", stroke: "#F2C25C", strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+            {peak && (
+              <div className="absolute right-4 top-3 rounded-xl border border-amber-500/30 bg-black/80 backdrop-blur-md px-3 py-2 text-right pointer-events-none">
+                <p className="text-[10px] text-muted-foreground">Puncak</p>
+                <p className="text-sm font-extrabold text-amber-200">{peak.value.toLocaleString("id-ID")}</p>
+                <p className="text-[10px] text-muted-foreground">{peak.day}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────── WHY CHOOSE US ────────── */
+function WhyChooseUs() {
+  const FEATURES = [
+    { icon: <Shield className="w-6 h-6" />,    title: "Aman 100%",         sub: "Sistem anti banned & terjamin aman digunakan." },
+    { icon: <Zap className="w-6 h-6" />,       title: "Proses Instant",    sub: "Proses otomatis, langsung dikirim." },
+    { icon: <Crown className="w-6 h-6" />,     title: "Kualitas Premium",  sub: "Cheat premium dengan update rutin." },
+    { icon: <Headset className="w-6 h-6" />,   title: "Support Profesional", sub: "Tim support siap membantu kapanpun." },
+  ];
+
+  return (
+    <section className="mt-8">
+      <div className="rounded-3xl border border-amber-500/25 bg-gradient-to-br from-[#15110a] via-[#0d0a05] to-black p-6 sm:p-8 relative overflow-hidden">
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-[80%] h-32 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+        <div className="text-center mb-7 relative">
+          <h2 className="text-xl sm:text-2xl font-black">
+            Kenapa Pilih <span className="text-gold-grad">TECHGEMING</span> Store?
+          </h2>
+        </div>
+        <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {FEATURES.map((f, i) => (
+            <div key={i} className="text-center p-3">
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center justify-center mb-3 shadow-[inset_0_0_20px_rgba(242,194,92,.15)]">
+                {f.icon}
+              </div>
+              <p className="text-[13px] sm:text-sm font-extrabold text-amber-100">{f.title}</p>
+              <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{f.sub}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────── HELP SECTION ────────── */
+function HelpSection() {
+  return (
+    <section className="mt-8">
+      <div className="rounded-3xl border border-border/60 bg-[hsl(36_16%_6%)] p-5 sm:p-6 relative overflow-hidden">
+        <div className="absolute right-2 top-2 bottom-2 w-32 sm:w-44 hidden sm:block pointer-events-none">
+          <div className="w-full h-full rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-700/5 to-transparent flex items-center justify-center">
+            <Headphones className="w-20 h-20 text-amber-400/60" strokeWidth={1.4} />
+          </div>
+        </div>
+        <div className="relative max-w-[560px]">
+          <h3 className="text-lg sm:text-xl font-black">Butuh Bantuan?</h3>
+          <p className="text-xs text-muted-foreground mt-1">Kami siap membantu kamu kapan pun dibutuhkan.</p>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <a
+              href="https://t.me/techgeming"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-3 rounded-2xl border border-border/60 bg-black/40 hover:border-amber-500/40 px-3 py-2.5"
+            >
+              <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-300 flex items-center justify-center">
+                <Send className="w-4 h-4" />
+              </div>
+              <div className="leading-tight">
+                <p className="text-sm font-extrabold">Telegram</p>
+                <p className="text-[10px] text-muted-foreground">Channel & Update</p>
+              </div>
+            </a>
+            <Link href="/developer">
+              <a className="flex items-center gap-3 rounded-2xl border border-border/60 bg-black/40 hover:border-amber-500/40 px-3 py-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-300 flex items-center justify-center">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div className="leading-tight">
+                  <p className="text-sm font-extrabold">Aplikasi</p>
+                  <p className="text-[10px] text-muted-foreground">Download Aplikasi</p>
+                </div>
+              </a>
+            </Link>
+            <Link href="/faq">
+              <a className="flex items-center gap-3 rounded-2xl border border-border/60 bg-black/40 hover:border-amber-500/40 px-3 py-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-300 flex items-center justify-center">
+                  <HelpCircle className="w-4 h-4" />
+                </div>
+                <div className="leading-tight">
+                  <p className="text-sm font-extrabold">FAQ</p>
+                  <p className="text-[10px] text-muted-foreground">Pertanyaan Umum</p>
+                </div>
+              </a>
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────── CATALOG (filterable, kept from original) ────────── */
+function Catalog({ searchQuery }: { searchQuery: string }) {
+  const [activeCategory, setActiveCategory] = useState<ProductCategory | "all">("all");
+  const storageVer = useStorageVersion();
+  const dynamicCats = React.useMemo(() => getCategories(), [storageVer]);
+
+  const filtered = React.useMemo(() => {
+    return getAllProducts().filter((p) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !q ||
+        p.title.toLowerCase().includes(q) ||
+        p.publisher.toLowerCase().includes(q);
+      const matchesCategory = activeCategory === "all" || p.category === activeCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchQuery, activeCategory, storageVer]);
+
+  return (
+    <section className="mt-8" id="catalog">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h2 className="text-lg sm:text-xl font-black flex items-center gap-2">
+          <Gamepad2 className="w-5 h-5 text-amber-300" />
+          Semua Produk
+        </h2>
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setActiveCategory("all")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition ${
+              activeCategory === "all"
+                ? "bg-amber-500/15 text-amber-200 border-amber-500/40"
+                : "bg-card border-border/60 text-muted-foreground hover:border-amber-500/30"
+            }`}
+          >
+            Semua
+          </button>
+          {dynamicCats.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setActiveCategory(c.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition ${
+                activeCategory === c.id
+                  ? "bg-amber-500/15 text-amber-200 border-amber-500/40"
+                  : "bg-card border-border/60 text-muted-foreground hover:border-amber-500/30"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {filtered.length > 0 ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+          {filtered.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-16 rounded-2xl border border-dashed border-border/60 bg-card/40">
+          <SearchIcon className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm font-bold">Produk tidak ditemukan</p>
+          <p className="text-xs text-muted-foreground">Coba kata kunci atau kategori lain</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => setActiveCategory("all")}
+          >
+            Reset filter
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState<ProductCategory | "all">("all");
   const [announcement, setAnnouncement] = useState("");
   const [announceDismissed, setAnnounceDismissed] = useState(false);
-  const { t } = useTranslation();
-
-  // Re-render real-time setiap kali admin ubah pengumuman / kategori / harga.
   const storageVer = useStorageVersion();
 
   useEffect(() => {
     setAnnouncement(getAnnouncement());
   }, [storageVer]);
 
-  const dynamicCats = React.useMemo(() => getCategories(), [storageVer]);
-  const CATEGORIES: { id: ProductCategory | "all"; label: string; icon: React.ReactNode }[] = [
-    { id: "all", label: t("cat_all"), icon: <Zap className="w-4 h-4" /> },
-    ...dynamicCats.map((c) => ({
-      id: c.id,
-      label: c.label,
-      icon: c.id === "voucher" ? <Gift className="w-4 h-4" /> : <Gamepad2 className="w-4 h-4" />,
-    })),
-  ];
-
-  const filteredProducts = getAllProducts().filter(p => {
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.publisher.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = activeCategory === "all" || p.category === activeCategory;
-    return matchesSearch && matchesCategory;
-  });
-
   return (
-    <div className="min-h-screen flex flex-col noise-bg">
-      <Navbar />
+    <DashboardLayout
+      searchValue={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder="Cari cheat, game, tools..."
+    >
       {announcement && !announceDismissed && (
-        <div className="bg-primary/10 border-b border-primary/30 px-4 py-2.5 flex items-center gap-3">
-          <Megaphone className="w-4 h-4 text-primary shrink-0" />
-          <p className="text-sm text-foreground flex-1">{announcement}</p>
-          <button onClick={() => setAnnounceDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0">
+        <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 flex items-center gap-3">
+          <Megaphone className="w-4 h-4 text-amber-300 shrink-0" />
+          <p className="text-sm flex-1">{announcement}</p>
+          <button onClick={() => setAnnounceDismissed(true)} className="text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
-      <main className="flex-1">
-        <StreakBanner />
-        <FeatureHero />
-        <section className="pt-6 pb-16 bg-background relative" id="catalog">
-          <div className="container mx-auto px-4">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-              <div>
-                <h2 className="text-3xl font-bold mb-2 flex items-center gap-2">
-                  <Gamepad2 className="w-8 h-8 text-primary" />
-                  {t("catalog_title")}
-                </h2>
-                <p className="text-muted-foreground">{t("catalog_sub")}</p>
-              </div>
 
-              <div className="w-full md:w-[300px] relative">
-                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input 
-                  placeholder={t("catalog_search")}
-                  className="pl-10 h-12 bg-muted/30 border-border"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
+      <WelcomeHero />
+      <PopularProducts />
+      <ActivitySummary />
+      <WhyChooseUs />
+      <HelpSection />
+      <Catalog searchQuery={searchQuery} />
 
-            {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-20 bg-muted/10 rounded-2xl border border-border border-dashed">
-                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                  <SearchIcon className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-xl font-bold mb-2">{t("not_found_title")}</h3>
-                <p className="text-muted-foreground">{t("not_found_sub")}</p>
-                <Button 
-                  variant="outline" 
-                  className="mt-6"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setActiveCategory("all");
-                  }}
-                >
-                  {t("reset_filter")}
-                </Button>
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
-
-      <BuyerActivity />
-      <Footer />
-      <HelpBar />
-    </div>
+      <p className="mt-10 mb-2 text-center text-[11px] text-muted-foreground">
+        © {new Date().getFullYear()} TECHGEMING Store. All rights reserved.
+      </p>
+    </DashboardLayout>
   );
 }
