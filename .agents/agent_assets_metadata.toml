@@ -1,0 +1,62 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "e9ZxgU8TKL8bUvCY6jthB"
+uri = "file://artifacts/techgeming/src/assets/product-1.png"
+type = "image"
+title = "Dripclient Noroot Cheat Cover"
+
+[[generated]]
+id = "Q0gMiyk516SIzRrj0vB_R"
+uri = "file://artifacts/techgeming/src/assets/product-2.png"
+type = "image"
+title = "Dripclient Root Cheat Cover"
+
+[[generated]]
+id = "qXQoMvefeaLCAk44qe5bi"
+uri = "file://artifacts/techgeming/src/assets/product-3.png"
+type = "image"
+title = "HG Noroot Cheat Cover"
+
+[[generated]]
+id = "cUdZGB2FKYA0gH6IxG-wI"
+uri = "file://artifacts/techgeming/src/assets/product-4.png"
+type = "image"
+title = "Pato Team Cheat Cover"
+
+[[generated]]
+id = "JoAK87P3VJT1tDFC03r_w"
+uri = "file://artifacts/techgeming/src/assets/product-5.png"
+type = "image"
+title = "Flourite XIT Cheat Cover"
+
+[[generated]]
+id = "t7UDjgQzJlD8PItFX8mxB"
+uri = "file://artifacts/techgeming/src/assets/product-6.png"
+type = "image"
+title = "Root Master Pro Cheat Cover"
+
+[[generated]]
+id = "nrinBAtAcpc1KkGzbMxex"
+uri = "file://artifacts/techgeming/src/assets/product-7.png"
+type = "image"
+title = "Ghost Injector Cheat Cover"
+
+[[generated]]
+id = "nDtvjbeYtYlRhDF5vaf3A"
+uri = "file://artifacts/techgeming/src/assets/product-8.png"
+type = "image"
+title = "Shadow ESP Cheat Cover"
+
+[[generated]]
+id = "OPT4tpZCBuDrrVXFen4Vp"
+uri = "file://artifacts/techgeming/src/assets/hero-bg.png"
+type = "image"
+title = "Techgeming Hero Background"
+
+[[generated]]
+id = "PnX1BPc8711ZRwcVwk1tI"
+uri = "file://artifacts/techgeming/src/assets/logo.png"
+type = "image"
+title = "Techgeming Logo Mark"
