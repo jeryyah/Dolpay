@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "TECHGEMING"
+version = "1.0.0"
+id = "artifacts/techgeming"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19742
+
+[services.development]
+run = "pnpm --filter @workspace/techgeming run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/techgeming", "run", "build" ]
+publicDir = "artifacts/techgeming/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19742"
+BASE_PATH = "/"
