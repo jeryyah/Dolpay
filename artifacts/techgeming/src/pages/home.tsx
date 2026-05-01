@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
 import {
   ShieldCheck, Zap, Lock, RefreshCw,
@@ -532,6 +533,7 @@ function Catalog({ searchQuery }: { searchQuery: string }) {
 }
 
 export default function Home() {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const [announceDismissed, setAnnounceDismissed] = useState(false);
@@ -545,7 +547,7 @@ export default function Home() {
     <DashboardLayout
       searchValue={searchQuery}
       onSearchChange={setSearchQuery}
-      searchPlaceholder="Cari cheat, game, tools..."
+      searchPlaceholder={t("search_ph")}
     >
       {announcement && !announceDismissed && (
         <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 flex items-center gap-3">

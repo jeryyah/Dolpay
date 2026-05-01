@@ -17,16 +17,7 @@ import {
 import { TGMonogram } from "@/components/brand/tg-monogram";
 import { useAuth } from "@/lib/auth-context";
 import { getUserLevel } from "@/lib/storage";
-
-const NAV: { href: string; label: string; icon: React.ReactNode }[] = [
-  { href: "/",              label: "Beranda",    icon: <HomeIcon className="w-[18px] h-[18px]" /> },
-  { href: "/wishlist",      label: "Produk",     icon: <Package  className="w-[18px] h-[18px]" /> },
-  { href: "/history",       label: "Riwayat",    icon: <Clock    className="w-[18px] h-[18px]" /> },
-  { href: "/leaderboard",   label: "Transaksi",  icon: <Receipt  className="w-[18px] h-[18px]" /> },
-  { href: "/chat",          label: "Live Chat",  icon: <MessageCircle className="w-[18px] h-[18px]" /> },
-  { href: "/garansi",       label: "Tools",      icon: <Wrench   className="w-[18px] h-[18px]" /> },
-  { href: "/profile",       label: "Pengaturan", icon: <Settings className="w-[18px] h-[18px]" /> },
-];
+import { useTranslation } from "react-i18next";
 
 const TIER_ICON: Record<string, React.ReactNode> = {
   Bronze: <Medal     className="w-3 h-3" />,
@@ -35,10 +26,25 @@ const TIER_ICON: Record<string, React.ReactNode> = {
   VIP:    <Sparkles  className="w-3 h-3" />,
 };
 
+function useNavItems() {
+  const { t } = useTranslation();
+  return [
+    { href: "/",            label: t("sidebar_home"),        icon: <HomeIcon      className="w-[18px] h-[18px]" /> },
+    { href: "/wishlist",    label: t("sidebar_product"),     icon: <Package       className="w-[18px] h-[18px]" /> },
+    { href: "/history",     label: t("sidebar_history"),     icon: <Clock         className="w-[18px] h-[18px]" /> },
+    { href: "/leaderboard", label: t("sidebar_transaction"), icon: <Receipt       className="w-[18px] h-[18px]" /> },
+    { href: "/chat",        label: t("sidebar_livechat"),    icon: <MessageCircle className="w-[18px] h-[18px]" /> },
+    { href: "/garansi",     label: t("sidebar_tools"),       icon: <Wrench        className="w-[18px] h-[18px]" /> },
+    { href: "/profile",     label: t("sidebar_settings"),    icon: <Settings      className="w-[18px] h-[18px]" /> },
+  ];
+}
+
 export function SidebarNav() {
   const [location] = useLocation();
   const { user, isAdmin, isOwner } = useAuth();
   const lvl = user ? getUserLevel(user.id) : null;
+  const { t } = useTranslation();
+  const NAV = useNavItems();
 
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
@@ -112,7 +118,7 @@ export function SidebarNav() {
               {TIER_ICON[lvl.tier]} {lvl.tier}
             </span>
           ) : (
-            <p className="text-[10px] text-muted-foreground">Aman · Cepat · Terpercaya</p>
+            <p className="text-[10px] text-muted-foreground">{t("badge_tagline")}</p>
           )}
         </div>
       </div>
@@ -123,6 +129,7 @@ export function SidebarNav() {
 /** Mobile bottom-bar nav (visible < lg). */
 export function MobileBottomNav() {
   const [location] = useLocation();
+  const NAV = useNavItems();
   const items = NAV.slice(0, 5);
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);

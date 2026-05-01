@@ -5,6 +5,17 @@ import LanguageDetector from "i18next-browser-languagedetector";
 const resources = {
   id: {
     translation: {
+      sidebar_home: "Beranda",
+      sidebar_product: "Produk",
+      sidebar_history: "Riwayat",
+      sidebar_transaction: "Transaksi",
+      sidebar_livechat: "Live Chat",
+      sidebar_tools: "Tools",
+      sidebar_settings: "Pengaturan",
+      btn_login: "Masuk",
+      search_ph: "Cari cheat, game, tools...",
+      badge_tagline: "Aman · Cepat · Terpercaya",
+      lang_switch: "English",
       nav_topup: "Topup Game",
       nav_voucher: "Voucher",
       nav_premium: "App Premium",
@@ -72,6 +83,17 @@ const resources = {
   },
   en: {
     translation: {
+      sidebar_home: "Home",
+      sidebar_product: "Products",
+      sidebar_history: "History",
+      sidebar_transaction: "Transaction",
+      sidebar_livechat: "Live Chat",
+      sidebar_tools: "Tools",
+      sidebar_settings: "Settings",
+      btn_login: "Login",
+      search_ph: "Search cheat, game, tools...",
+      badge_tagline: "Safe · Fast · Trusted",
+      lang_switch: "Bahasa Indonesia",
       nav_topup: "Game Top-up",
       nav_voucher: "Voucher",
       nav_premium: "Premium App",
@@ -697,7 +719,7 @@ i18n
 
 // Sync <html lang> for accessibility & SEO.
 if (typeof document !== "undefined") {
-  const sync = () => { document.documentElement.lang = i18n.language || "id"; };
+  const sync = () => { document.documentElement.lang = i18n.language || "en"; };
   sync();
   i18n.on("languageChanged", sync);
 }
