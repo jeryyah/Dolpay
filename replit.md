@@ -30,11 +30,19 @@ pnpm workspace monorepo using TypeScript. TECHGEMING — a digital gaming produc
 - **Type**: React + Vite web app
 - **Preview path**: `/`
 - **Port**: 19742
-- **Description**: Gaming digital product store with product listings, QRIS & USDT payments, admin panel, live chat, order history, leaderboard, referral system, and multi-language (i18n) support. Data is stored in localStorage.
+- **Description**: Gaming digital product store with product listings, QRIS & USDT payments, admin panel, live chat, order history, leaderboard, referral system, and multi-language (i18n) support.
+- **Data sync**: Uses `lib/cloud-sync.ts` to sync all `pinz_*` localStorage keys to the API server every 2 seconds (Last-Writer-Wins). On load, `primeCloudSync()` pulls server snapshot before first render.
 - **Key pages**: Home, Product Detail, Payment (QRIS/USDT), Admin, Login, History, Chat, Leaderboard, Wishlist, My Keys, Notifications, Referral, Developer, FAQ, Contact, Garansi
 
 ### API Server (`artifacts/api-server`)
 - **Type**: Express API
 - **Path**: `/api`
+- **Key endpoints**:
+  - `GET /api/sync` — returns full snapshot of all synced key-value pairs
+  - `POST /api/sync` — stores a single key with Last-Writer-Wins logic (`{ key, value, v }`)
+
+### Database
+- **Table**: `sync_store` — key (PK), value (TEXT nullable), v (BIGINT timestamp)
+- All admin config (products, payment settings, categories) and user data (users, orders, stock) are persisted here via the sync layer
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

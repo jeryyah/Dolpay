@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: sync
+    description: Cloud data sync operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /sync:
+    get:
+      operationId: syncGet
+      tags: [sync]
+      summary: Pull all synced keys
+      description: Returns the full snapshot of all stored key-value pairs
+      responses:
+        "200":
+          description: Full snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncSnapshot"
+    post:
+      operationId: syncPost
+      tags: [sync]
+      summary: Push a single key
+      description: Stores a key using Last-Writer-Wins logic based on version timestamp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncPushBody"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncPushResult"
+        "400":
+          description: Bad request
 components:
   schemas:
     HealthStatus:
@@ -33,4 +68,45 @@ components:
           type: string
       required:
         - status
-
+    SyncEntry:
+      type: object
+      properties:
+        value:
+          type: string
+          nullable: true
+        v:
+          type: number
+      required:
+        - value
+        - v
+    SyncSnapshot:
+      type: object
+      additionalProperties:
+        $ref: "#/components/schemas/SyncEntry"
+    SyncPushBody:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+          nullable: true
+        v:
+          type: number
+      required:
+        - key
+        - v
+    SyncPushResult:
+      type: object
+      properties:
+        stored:
+          type: boolean
+        v:
+          type: number
+        value:
+          type: string
+          nullable: true
+      required:
+        - stored
+        - v
+        - value
